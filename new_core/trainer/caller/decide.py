@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .contracts import Act, Decision, Mood, Style, Understanding
+from .contracts import Act, Decision, DialogContext, Mood, Style, Understanding
 from .scenario import Profile, Scenario
 
 
@@ -20,6 +20,20 @@ class CallerState:
     idle_turns: int = 0
     mood: Mood = Mood.COMPOSED
     last_initiative: int = -99
+    recent_ops: list[str] = field(default_factory=list)
+    recent_keys: list[str] = field(default_factory=list)
+
+    def dialog_context(self) -> DialogContext:
+        return DialogContext(list(self.recent_ops), list(self.recent_keys))
+
+    def remember(self, utterance: str, keys: list[str]) -> None:
+        """Обновить историю после хода (для контекстных уточнений)."""
+        self.recent_ops = (self.recent_ops + [utterance])[-3:]
+        for k in keys:
+            if k in self.recent_keys:
+                self.recent_keys.remove(k)
+            self.recent_keys.append(k)
+        self.recent_keys = self.recent_keys[-5:]
 
 
 def decide(u: Understanding, st: CallerState, sc: Scenario) -> Decision:

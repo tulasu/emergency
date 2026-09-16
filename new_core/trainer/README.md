@@ -53,26 +53,38 @@ python3 -m caller.cli run scenarios/bilet04_call01.json -f examples/dialog.txt
 python3 -m caller.cli eval scenarios/bilet04_call01.json -f examples/blind_bilet04.txt
 ```
 
-Переключение понимания и характера заявителя:
+Понимание переключается флагом `--nlu`:
 
 ```bash
+python3 -m caller.cli chat scenarios/bilet04_call01.json --nlu lexical
+python3 -m caller.cli chat scenarios/bilet04_call01.json --nlu hybrid
 export ANTHROPIC_API_KEY=...
 python3 -m caller.cli chat scenarios/bilet04_call01.json --nlu llm --profile normal
 ```
 
+- `lexical` — офлайн, margin + `Profile.min_confidence`; при сомнении «не знаю».
+- `hybrid` — lexical; на ambiguous / эллипсис с контекстом / reject+context —
+  LM Studio (`http://127.0.0.1:1234`, ~200 мс). Удачные формулировки копятся в
+  `cache/paraphrases/{scenario_id}.json` (JSON преподавателя не меняем).
+- `llm` — Anthropic-классификатор; без ключа молча lexical.
+
+На каждом ходе CLI печатает строку timing (`--timing` / `--no-timing`):
+
+```text
+[timing total=187ms understand=172 decide=0 speak=0 | lex=4 llm=timeout:168 path=lexical]
+```
+
 Без ключа режим `llm` молча работает как `lexical`, демо не встаёт.
 
-## Два способа понимать
+## Способы понимать
 
-`lexical` — пересечение лемм, взвешенное обратной частотой. Полностью офлайн,
-ничего не весит, на слепых наборах даёт около 60%.
+`lexical` — пересечение лемм + IDF + runtime-paraphrases из кэша. Ключ только при
+`score ≥ min_confidence` и margin; иначе «не знаю».
 
-`llm` — модель работает **классификатором**: на вход список ключей и реплика,
-на выход два-три ключа. Текст ответа по-прежнему берётся из сценария, поэтому
-заявитель физически не может ничего выдумать, а аудио остаётся заранее
-сгенерированным. Результат кэшируется по нормализованной фразе в
-`cache/understand.json`: каждая новая формулировка стоит один вызов за всё
-время жизни системы, дальше бесплатно.
+`hybrid` — то же, плюс локальный классификатор с диалоговым контекстом
+(последние реплики и факты). Текст ответа всегда из сценария.
+
+`llm` — облачный классификатор ключей с кэшем в `cache/understand.json`.
 
 ## Что делает заявителя живым
 

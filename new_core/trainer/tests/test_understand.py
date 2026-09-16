@@ -58,8 +58,8 @@ class _FakeLocal(LocalLlm):
         self.keys_by_text = keys_by_text
         self.calls_log: list[tuple[str, DialogContext | None]] = []
 
-    def classify(self, text, context=None):
-        self.calls_log.append((text, context))
+    def classify(self, text, context=None, lexical_hint=None):
+        self.calls_log.append((text, context, lexical_hint))
         keys = self.keys_by_text.get(text, [])
         return keys, "ok", 1.0, False
 
@@ -98,3 +98,33 @@ def test_engine_копит_recent_keys():
     eng.handle("есть ли пострадавшие?")
     assert "пострадавшие" in eng.state.recent_keys
     assert eng.state.recent_ops
+
+
+def test_hybrid_verify_отец_после_фио_не_повторяет_имя(tmp_path: Path):
+    """Lexical клеит «отца зовут» на фио — LLM должен отвергнуть."""
+    bank = ParaphraseBank("test_verify_fio", root=tmp_path)
+    phrase = "А как отца вашего зовут?"
+    fake = _FakeLocal(SC, {phrase: []})
+    hy = Hybrid(SC, lexical=Lexical(SC, paraphrases=bank), local=fake,
+                paraphrases=bank)
+    ctx = DialogContext(
+        recent_ops=["как вас зовут"],
+        recent_keys=["фио"],
+    )
+    u = hy.understand(phrase, context=ctx)
+    assert fake.calls_log, "повтор темы фио должен уйти в LLM на проверку"
+    assert fake.calls_log[0][2] == ["фио"]
+    assert u.keys == []
+    assert u.timing.nlu_path == "hybrid_llm"
+
+
+def test_hybrid_первый_фио_без_истории_без_llm(tmp_path: Path):
+    """Первый уверенный «как вас зовут» — lexical, без сети."""
+    bank = ParaphraseBank("test_first_fio", root=tmp_path)
+    fake = _FakeLocal(SC, {})
+    hy = Hybrid(SC, lexical=Lexical(SC, paraphrases=bank), local=fake,
+                paraphrases=bank)
+    u = hy.understand("как вас зовут", context=None)
+    assert "фио" in u.keys
+    assert not fake.calls_log
+    assert u.timing.llm_status == "skip"

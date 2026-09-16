@@ -293,7 +293,13 @@ SYSTEM = """Ты классифицируешь реплику оператор�
 - если в одной реплике несколько вопросов, перечисли все подходящие ключи;
 - не выдумывай ключей, которых нет в списке;
 - уточнение без полного смысла («какой?», «марка?», «автомобиль?») относи
-  к факту из контекста диалога, если подходит; иначе верни пустой список."""
+  к факту из контекста диалога, только если реплика про то же самое;
+- ключ про имя/ФИО заявителя — только если спрашивают имя/ФИО самого
+  заявителя («как вас зовут», «ваше ФИО»). Если спрашивают про другого
+  человека (отец, мать, дочь, сын, родственник, «кто такая X») — пустой список,
+  даже если в контексте недавно был факт имени;
+- если дан кандидат lexical — прими его только когда реплика действительно
+  про этот факт; иначе пустой список или другой подходящий ключ."""
 
 
 def _parse_keys(raw: str, facts: dict) -> list[str]:
@@ -305,16 +311,25 @@ def _parse_keys(raw: str, facts: dict) -> list[str]:
     return [k for k in keys if k in facts]
 
 
-def _format_user(text: str, context: DialogContext | None) -> str:
+def _format_user(text: str, context: DialogContext | None,
+                 lexical_hint: list[str] | None = None) -> str:
     if not context or not context.nonempty():
+        if lexical_hint:
+            return (f"Кандидат lexical (проверь): {', '.join(lexical_hint)}\n"
+                    f"Текущая реплика: {text}")
         return text
     ops = "\n".join(f"- {o}" for o in context.recent_ops) or "—"
     keys = ", ".join(context.recent_keys) or "—"
-    return (
-        f"Недавние реплики оператора:\n{ops}\n"
-        f"Недавно обсуждавшиеся факты: {keys}\n"
-        f"Текущая реплика: {text}"
-    )
+    parts = [
+        f"Недавние реплики оператора:\n{ops}",
+        f"Недавно обсуждавшиеся факты: {keys}",
+    ]
+    if lexical_hint:
+        parts.append(
+            f"Кандидат lexical (проверь — часто ошибка на уточнении): "
+            f"{', '.join(lexical_hint)}")
+    parts.append(f"Текущая реплика: {text}")
+    return "\n".join(parts)
 
 
 class Llm:
@@ -344,14 +359,16 @@ class Llm:
         return base
 
     def _ask_model(self, text: str,
-                   context: DialogContext | None = None
+                   context: DialogContext | None = None,
+                   lexical_hint: list[str] | None = None
                    ) -> tuple[list[str] | None, str, float]:
         if not self.key:
             return None, "error", 0.0
         body = json.dumps({
             "model": self.MODEL, "max_tokens": 200, "temperature": 0,
             "system": SYSTEM.format(catalog=self.catalog),
-            "messages": [{"role": "user", "content": _format_user(text, context)}],
+            "messages": [{"role": "user",
+                          "content": _format_user(text, context, lexical_hint)}],
         }).encode()
         req = urllib.request.Request(self.URL, data=body, headers={
             "content-type": "application/json",
@@ -449,10 +466,13 @@ class LocalLlm:
         return base
 
     def classify(self, text: str,
-                 context: DialogContext | None = None
+                 context: DialogContext | None = None,
+                 lexical_hint: list[str] | None = None
                  ) -> tuple[list[str], str, float, bool]:
         """(keys, status, ms, from_cache)."""
         norm = self._norm(text, context)
+        if lexical_hint:
+            norm = norm + "##" + ",".join(lexical_hint)
         if norm in self.cache:
             self.hits += 1
             return self.cache[norm], "cache", 0.0, True
@@ -463,7 +483,8 @@ class LocalLlm:
             "max_tokens": 200,
             "messages": [
                 {"role": "system", "content": self.system},
-                {"role": "user", "content": _format_user(text, context)},
+                {"role": "user",
+                 "content": _format_user(text, context, lexical_hint)},
             ],
         }).encode()
         req = urllib.request.Request(self.url, data=body, headers={
@@ -510,9 +531,12 @@ class Hybrid:
 
     def _need_llm(self, text: str, found: list[str], need_ambiguous: bool,
                   had_reject: bool, context: DialogContext | None) -> bool:
-        if found:
-            return False
         ctx_ok = bool(context and context.nonempty())
+        if found:
+            # тот же ключ уже в теме — lexical часто клеит «отца/дочь» на фио
+            if ctx_ok and any(k in context.recent_keys for k in found):
+                return True
+            return False
         if need_ambiguous:
             return True
         if is_ellipsis(text) and ctx_ok:
@@ -557,7 +581,9 @@ class Hybrid:
 
         src = "lexical"
         if self._need_llm(text, found, need_ambiguous, had_reject, context):
-            keys, status, llm_ms, from_cache = self.local.classify(text, context)
+            hint = list(found) if found else None
+            keys, status, llm_ms, from_cache = self.local.classify(
+                text, context, lexical_hint=hint)
             timing.llm_called = not from_cache
             timing.llm_ms = llm_ms
             timing.llm_status = status if not from_cache else "cache"
@@ -568,6 +594,7 @@ class Hybrid:
                 timing.nlu_path = "hybrid_llm"
                 src = "hybrid"
             else:
+                # timeout/error при проверке: лучше «не знаю», чем чужой факт
                 timing.nlu_path = "lexical"
                 keys = []
                 src = "hybrid"

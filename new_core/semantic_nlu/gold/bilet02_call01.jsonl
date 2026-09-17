@@ -1,0 +1,19 @@
+{"text": "Что у вас произошло?", "expect": ["задымление"], "note": "in-vocab"}
+{"text": "Откуда идёт дым, что дымится?", "expect": ["задымление"], "note": "paraphrase"}
+{"text": "Открытое пламя видите?", "expect": ["открытое_пламя"], "note": "in-vocab"}
+{"text": "Огонь есть или только дым?", "expect": ["открытое_пламя"], "note": "paraphrase"}
+{"text": "Есть пострадавшие?", "expect": ["пострадавшие"], "note": "in-vocab"}
+{"text": "На каком этаже вы находитесь?", "expect": ["этаж_заявителя"], "note": "in-vocab"}
+{"text": "С какого этажа звоните?", "expect": ["этаж_заявителя"], "note": "paraphrase close-key"}
+{"text": "Сколько этажей в доме?", "expect": ["этажность_дома"], "note": "in-vocab close-key"}
+{"text": "Дом какой этажности?", "expect": ["этажность_дома"], "note": "paraphrase close-key"}
+{"text": "Назовите адрес", "expect": ["адрес"], "note": "in-vocab"}
+{"text": "В каком подъезде?", "expect": ["подъезд"], "note": "in-vocab"}
+{"text": "Код домофона какой?", "expect": ["домофон"], "note": "in-vocab"}
+{"text": "Как вас зовут?", "expect": ["фио_заявителя"], "note": "in-vocab"}
+{"text": "Телефон для связи?", "expect": ["телефон_заявителя"], "note": "in-vocab"}
+{"text": "Проезд свободен?", "expect": ["доступ"], "note": "in-vocab"}
+{"text": "Пламя тушить не нужно", "expect": [], "note": "negation"}
+{"text": "Адрес уточнять не буду", "expect": [], "note": "negation"}
+{"text": "Оставайтесь на линии", "expect": [], "note": "speech-act"}
+{"text": "Какой сегодня курс доллара?", "expect": [], "note": "off-topic"}

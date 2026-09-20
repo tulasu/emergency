@@ -1,0 +1,21 @@
+[project]
+name = "dispatcher"
+version = "0.1.0"
+description = "Ядро заявителя: реплика оператора 112 -> факт из сценария"
+requires-python = ">=3.12"
+dependencies = [
+    "pymorphy3==2.0.6",
+    "razdel==0.5.0",
+    "numpy>=2.0",
+    "PyYAML>=6.0",
+    "setuptools<81",
+]
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.20", "tokenizers>=0.20"]
+cuda = ["torch>=2.5", "transformers>=4.45"]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

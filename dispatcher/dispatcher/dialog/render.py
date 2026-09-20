@@ -62,22 +62,41 @@ class Renderer:
 
     def say(self, d: Decision) -> Reply:
         parts: list[str] = []
-        audio: str | None = None
+        ids: list[str] = []
 
         if d.style in GENERIC:
-            parts.append(self.rnd.choice(GENERIC[d.style][d.mood]))
+            # один бросок на пару (текст, файл): иначе текст скажет одно,
+            # а предрендер сыграет другое
+            variants = GENERIC[d.style][d.mood]
+            i = self.rnd.randrange(len(variants))
+            parts.append(variants[i])
+            ids.append(f"common/{d.style.value}/{d.mood.name.lower()}_{i}.wav")
         else:
             for key in d.reveal:
                 fact = self.sc.facts[key]
                 parts.append(fact.answer(d.style))
-                audio = audio or fact.audio.get(d.style.value)
+                hit = fact.audio.get(d.style.value) or fact.audio.get("plain")
+                if hit:
+                    ids.append(hit)
             if d.style is Style.SLOW_DOWN:
                 parts.append(SLOW_DOWN[d.mood])
+                ids.append(f"common/slow_down/{d.mood.name.lower()}.wav")
 
         if d.unprompted:
             parts.append(URGE[d.mood].format(what=self._name(d.unprompted)))
+            fact = self.sc.facts.get(d.unprompted)
+            slot = fact.slot if fact else ""
+            if slot:
+                ids.append(f"common/urge/{d.mood.name.lower()}/{slot}.wav")
 
-        return Reply(" ".join(p for p in parts if p), audio, d.style, d.mood)
+        # композит клеит плеер конкатенацией (8 кГц mono, шаг 4); без файлов
+        # в индексе — None, плеер идёт через живой TTS по тексту
+        return Reply(
+            " ".join(p for p in parts if p),
+            "+".join(ids) or None,
+            d.style,
+            d.mood,
+        )
 
     def _name(self, key: str) -> str:
         """Как заявитель называет сведение, о котором сам напоминает.

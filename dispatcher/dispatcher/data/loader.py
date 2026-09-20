@@ -147,4 +147,31 @@ def load_all(onto: Ontology | None = None, root: Path = DATA / "scenarios") -> L
                     bucket.append(q)
                     origin.append(sc.id)
 
+    _merge_audio_index(scenarios)
+
     return Loaded(scenarios, issues, questions, sources)
+
+
+def _merge_audio_index(scenarios: dict[str, Scenario]) -> None:
+    """Предрендер шага 2: audio_id из data/audio/index.json -> Fact.audio.
+
+    Индекса нет (синтез ещё не гоняли) — молча ничего, Reply.audio_id
+    остаётся None и плеер говорит через живой TTS по Reply.text."""
+    try:
+        raw = (DATA / "audio" / "index.json").read_text(encoding="utf-8")
+    except OSError:
+        return
+    files = json.loads(raw).get("files", {})
+    for aid, rel in files.items():
+        if not aid.startswith("a/"):
+            continue
+        _, sid, fkey_fs, style_ext = aid.split("/", 3)
+        style = style_ext.removesuffix(".wav")
+        sc = scenarios.get(sid)
+        if sc is None:
+            continue
+        # fskey необратим (# -> _), поэтому ищем по санитизированному
+        for key, fact in sc.facts.items():
+            if key.replace("#", "_").replace("/", "_") == fkey_fs:
+                fact.audio.setdefault(style, rel)
+                break

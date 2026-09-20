@@ -1,0 +1,46 @@
+# Шаг 7. Highload: ферма за балансировщиком. Один GPU = один python-воркер.
+services:
+  asterisk:
+    image: andrius/asterisk:20
+    network_mode: host # RTP-тайминги не любят NAT докера
+    volumes:
+      - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+    deploy:
+      replicas: 1 # дальше: +Kamailio впереди, реплик K
+
+  python:
+    build: .
+    command: >-
+      python3 -m dispatcher.serve --port 8000
+      --model e5-small-tuned --backend torch --device cuda
+      --arbiter laya --thin-rescue --require-cuda
+    environment:
+      HF_HUB_OFFLINE: 1
+      DISPATCHER_MODELS: /app/models
+    volumes:
+      - ./models:/app/models:ro
+      - ./data/audio:/app/data/audio:ro # предрендер шага 2
+    deploy:
+      replicas: 1 # M = звонки / ~50-100 сессий на GPU, уточнить нагрузочным
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1}]
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5).status==200 else 1)"]
+      interval: 10s
+      start_period: 120s # прогрев энкодера + арбитра (~минута)
+    deploy:
+      replicas: 1 # M = звонки / ~50-100 сессий на GPU, уточнить нагрузочным
+
+  orchestrator:
+    build: ./orchestrator
+    ports: ["8080:8080"]
+    environment:
+      ARI_URL: http://asterisk:8088/ari
+      PY_URL: http://python:8000
+      RTP_BASE: 10000
+    depends_on: [asterisk, python]
+    deploy:
+      replicas: 2 # stateless, HPA по inflight

@@ -1,0 +1,12 @@
+{
+	auto_https disable_redirects
+}
+
+:80 {
+	respond "emergency edge ok" 200
+}
+
+:443 {
+	tls internal
+	respond "emergency edge ok" 200
+}

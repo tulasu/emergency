@@ -7,7 +7,7 @@ default:
     @just --list
 
 generate:
-    cue export -f -e compose --outfile {{compose_file}} system.cue dev.cue
+    cue export -f -e compose --outfile {{compose_file}} config/system.cue config/dev.cue
 
 up: generate
     docker compose -f {{compose_file}} up -d

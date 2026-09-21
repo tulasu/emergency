@@ -1,0 +1,56 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - depguard
+  settings:
+    depguard:
+      rules:
+        platform:
+          files:
+            - "**/internal/platform/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/platform
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        auth_domain:
+          files:
+            - "**/internal/auth/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/auth/domain
+            - github.com/google/uuid
+        auth_application:
+          files:
+            - "**/internal/auth/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/auth/domain
+            - traineebox/internal/auth/application
+            - github.com/google/uuid
+            - golang.org/x/crypto
+        auth_infrastructure:
+          files:
+            - "**/internal/auth/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/auth/domain
+            - traineebox/internal/auth/infrastructure
+            - traineebox/internal/platform/postgres
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        auth_presentation:
+          files:
+            - "**/internal/auth/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/auth/application
+            - traineebox/internal/auth/domain
+            - traineebox/internal/auth/presentation
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid

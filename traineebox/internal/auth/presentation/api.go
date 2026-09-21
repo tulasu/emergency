@@ -5,16 +5,18 @@ import (
 )
 
 type API struct {
-	createUser application.CreateUser
-	login      application.Login
-	logout     application.Logout
-	me         application.Me
-	blockUser  application.BlockUser
-	changeRole application.ChangeRole
+	version      string
+	createUser   application.CreateUser
+	login        application.Login
+	logout       application.Logout
+	me           application.Me
+	blockUser    application.BlockUser
+	changeRole   application.ChangeRole
 	authenticate application.Authenticate
 }
 
 type Deps struct {
+	Version      string
 	CreateUser   application.CreateUser
 	Login        application.Login
 	Logout       application.Logout
@@ -26,6 +28,7 @@ type Deps struct {
 
 func NewAPI(deps Deps) *API {
 	return &API{
+		version:      deps.Version,
 		createUser:   deps.CreateUser,
 		login:        deps.Login,
 		logout:       deps.Logout,

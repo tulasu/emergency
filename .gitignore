@@ -21,3 +21,6 @@ core.zip
 
 # docker compose
 docker-compose.yml
+
+# build output
+bin/

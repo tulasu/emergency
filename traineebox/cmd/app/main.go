@@ -20,6 +20,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+var version = "dev"
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -39,6 +41,7 @@ func main() {
 	authenticate := application.Authenticate{Users: users, Sessions: sessions}
 
 	apiHandlers := presentation.NewAPI(presentation.Deps{
+		Version:      version,
 		CreateUser:   application.CreateUser{Users: users, Hasher: hasher},
 		Login:        application.Login{Users: users, Sessions: sessions, Hasher: hasher, SessionTTL: cfg.SessionTTL},
 		Logout:       application.Logout{Sessions: sessions},
@@ -49,7 +52,7 @@ func main() {
 	})
 
 	router := chi.NewMux()
-	apiCfg := huma.DefaultConfig("TraineeBox API", "0.1.0")
+	apiCfg := huma.DefaultConfig("TraineeBox API", version)
 	apiCfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"session": {
 			Type:         "http",
@@ -67,7 +70,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("listening on %s", cfg.HTTPAddr)
+		log.Printf("listening on %s version=%s", cfg.HTTPAddr, version)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

@@ -138,7 +138,13 @@ func Truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := pool.Exec(ctx, `TRUNCATE group_members, groups, sessions, users CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `
+		TRUNCATE attempt_answer_services, attempt_answer_tags, attempt_answers,
+		         ticket_attempts, reference_answer_services, reference_answer_tags,
+		         ticket_reference_answers, tickets,
+		         incident_tags, incident_types, emergency_services,
+		         group_members, groups, sessions, users
+		CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

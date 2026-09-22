@@ -16,6 +16,11 @@ import (
 	"traineebox/internal/groups/domain/value_objects"
 	groupsinfra "traineebox/internal/groups/infrastructure"
 	groupspresentation "traineebox/internal/groups/presentation"
+	ticketsapp "traineebox/internal/tickets/application"
+	ticketserrs "traineebox/internal/tickets/domain/errs"
+	ticketsvo "traineebox/internal/tickets/domain/value_objects"
+	ticketsinfra "traineebox/internal/tickets/infrastructure"
+	ticketspresentation "traineebox/internal/tickets/presentation"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -23,14 +28,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type sessionAuthenticator struct {
+type groupsSessionAuthenticator struct {
 	auth application.Authenticate
 }
 
-func (a sessionAuthenticator) CurrentUser(ctx context.Context, token string) (groupsapp.SessionUser, error) {
+func (a groupsSessionAuthenticator) CurrentUser(ctx context.Context, token string) (groupsapp.SessionUser, error) {
 	user, err := a.auth.Execute(ctx, token)
 	if err != nil {
-		return groupsapp.SessionUser{}, mapAuthError(err)
+		return groupsapp.SessionUser{}, mapGroupsAuthError(err)
 	}
 	role, err := value_objects.ParseAccountRole(string(user.Role))
 	if err != nil {
@@ -39,7 +44,23 @@ func (a sessionAuthenticator) CurrentUser(ctx context.Context, token string) (gr
 	return groupsapp.SessionUser{ID: user.ID, Role: role}, nil
 }
 
-func mapAuthError(err error) error {
+type ticketsSessionAuthenticator struct {
+	auth application.Authenticate
+}
+
+func (a ticketsSessionAuthenticator) CurrentUser(ctx context.Context, token string) (ticketsapp.SessionUser, error) {
+	user, err := a.auth.Execute(ctx, token)
+	if err != nil {
+		return ticketsapp.SessionUser{}, mapTicketsAuthError(err)
+	}
+	role, err := ticketsvo.ParseAccountRole(string(user.Role))
+	if err != nil {
+		return ticketsapp.SessionUser{}, err
+	}
+	return ticketsapp.SessionUser{ID: user.ID, Role: role}, nil
+}
+
+func mapGroupsAuthError(err error) error {
 	switch {
 	case errors.Is(err, autherrs.ErrUnauthorized):
 		return groupserrs.ErrUnauthorized
@@ -49,6 +70,21 @@ func mapAuthError(err error) error {
 		return groupserrs.ErrNotFound
 	case errors.Is(err, autherrs.ErrForbidden):
 		return groupserrs.ErrForbidden
+	default:
+		return err
+	}
+}
+
+func mapTicketsAuthError(err error) error {
+	switch {
+	case errors.Is(err, autherrs.ErrUnauthorized):
+		return ticketserrs.ErrUnauthorized
+	case errors.Is(err, autherrs.ErrUserBlocked):
+		return ticketserrs.ErrUserBlocked
+	case errors.Is(err, autherrs.ErrNotFound):
+		return ticketserrs.ErrNotFound
+	case errors.Is(err, autherrs.ErrForbidden):
+		return ticketserrs.ErrForbidden
 	default:
 		return err
 	}
@@ -83,7 +119,27 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		GetGroup:     groupsapp.GetGroup{Groups: groupsRepo},
 		AddMember:    groupsapp.AddMember{Groups: groupsRepo, Directory: directory},
 		RemoveMember: groupsapp.RemoveMember{Groups: groupsRepo},
-		Authenticate: sessionAuthenticator{auth: authenticate},
+		Authenticate: groupsSessionAuthenticator{auth: authenticate},
+	})
+
+	catalogRepo := ticketsinfra.NewCatalogRepository(pool)
+	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
+	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
+	membership := ticketsinfra.NewGroupMembership(pool)
+	ticketsHandlers := ticketspresentation.NewAPI(ticketspresentation.Deps{
+		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
+		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
+		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
+		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
+		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
+		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},
+		SetReferenceAnswer: ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership},
+		StartAttempt:       ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		SaveAttemptAnswer:  ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
+		SubmitAttempt:      ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
+		GetMyAttempt:       ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		ListMyAttempts:     ticketsapp.ListMyAttempts{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		Authenticate:       ticketsSessionAuthenticator{auth: authenticate},
 	})
 
 	router := chi.NewMux()
@@ -98,5 +154,6 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	api := humachi.New(router, apiCfg)
 	authpresentation.Register(api, authHandlers)
 	groupspresentation.Register(api, groupsHandlers)
+	ticketspresentation.Register(api, ticketsHandlers)
 	return router
 }

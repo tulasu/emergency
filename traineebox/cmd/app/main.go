@@ -17,6 +17,9 @@ import (
 	groupspresentation "traineebox/internal/groups/presentation"
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
+	ticketsapp "traineebox/internal/tickets/application"
+	ticketsinfra "traineebox/internal/tickets/infrastructure"
+	ticketspresentation "traineebox/internal/tickets/presentation"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -56,7 +59,6 @@ func main() {
 
 	groupsRepo := groupsinfra.NewGroupRepository(pool)
 	directory := groupsinfra.NewUserDirectory(pool)
-	groupsAuth := sessionAuthenticator{auth: authenticate}
 	groupsHandlers := groupspresentation.NewAPI(groupspresentation.Deps{
 		CreateGroup:  groupsapp.CreateGroup{Groups: groupsRepo, Directory: directory},
 		RenameGroup:  groupsapp.RenameGroup{Groups: groupsRepo},
@@ -65,7 +67,27 @@ func main() {
 		GetGroup:     groupsapp.GetGroup{Groups: groupsRepo},
 		AddMember:    groupsapp.AddMember{Groups: groupsRepo, Directory: directory},
 		RemoveMember: groupsapp.RemoveMember{Groups: groupsRepo},
-		Authenticate: groupsAuth,
+		Authenticate: groupsSessionAuthenticator{auth: authenticate},
+	})
+
+	catalogRepo := ticketsinfra.NewCatalogRepository(pool)
+	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
+	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
+	membership := ticketsinfra.NewGroupMembership(pool)
+	ticketsHandlers := ticketspresentation.NewAPI(ticketspresentation.Deps{
+		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
+		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
+		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
+		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
+		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
+		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},
+		SetReferenceAnswer: ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership},
+		StartAttempt:       ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		SaveAttemptAnswer:  ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
+		SubmitAttempt:      ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
+		GetMyAttempt:       ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		ListMyAttempts:     ticketsapp.ListMyAttempts{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
+		Authenticate:       ticketsSessionAuthenticator{auth: authenticate},
 	})
 
 	router := chi.NewMux()
@@ -80,6 +102,7 @@ func main() {
 	api := humachi.New(router, apiCfg)
 	authpresentation.Register(api, authHandlers)
 	groupspresentation.Register(api, groupsHandlers)
+	ticketspresentation.Register(api, ticketsHandlers)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

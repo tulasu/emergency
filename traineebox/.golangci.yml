@@ -56,3 +56,42 @@ linters:
             - traineebox/internal/testkit
             - github.com/danielgtaylor/huma
             - github.com/google/uuid
+        groups_domain:
+          files:
+            - "**/internal/groups/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/groups/domain
+            - github.com/google/uuid
+        groups_application:
+          files:
+            - "**/internal/groups/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/groups/domain
+            - traineebox/internal/groups/application
+            - github.com/google/uuid
+        groups_infrastructure:
+          files:
+            - "**/internal/groups/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/groups/domain
+            - traineebox/internal/groups/infrastructure
+            - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        groups_presentation:
+          files:
+            - "**/internal/groups/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/groups/application
+            - traineebox/internal/groups/domain
+            - traineebox/internal/groups/presentation
+            - traineebox/internal/testkit
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid

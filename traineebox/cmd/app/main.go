@@ -11,7 +11,10 @@ import (
 
 	"traineebox/internal/auth/application"
 	authinfra "traineebox/internal/auth/infrastructure"
-	"traineebox/internal/auth/presentation"
+	authpresentation "traineebox/internal/auth/presentation"
+	groupsapp "traineebox/internal/groups/application"
+	groupsinfra "traineebox/internal/groups/infrastructure"
+	groupspresentation "traineebox/internal/groups/presentation"
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
 
@@ -40,7 +43,7 @@ func main() {
 	hasher := application.PasswordHasher{}
 	authenticate := application.Authenticate{Users: users, Sessions: sessions}
 
-	apiHandlers := presentation.NewAPI(presentation.Deps{
+	authHandlers := authpresentation.NewAPI(authpresentation.Deps{
 		Version:      version,
 		CreateUser:   application.CreateUser{Users: users, Hasher: hasher},
 		Login:        application.Login{Users: users, Sessions: sessions, Hasher: hasher, SessionTTL: cfg.SessionTTL},
@@ -49,6 +52,20 @@ func main() {
 		BlockUser:    application.BlockUser{Users: users},
 		ChangeRole:   application.ChangeRole{Users: users},
 		Authenticate: authenticate,
+	})
+
+	groupsRepo := groupsinfra.NewGroupRepository(pool)
+	directory := groupsinfra.NewUserDirectory(pool)
+	groupsAuth := sessionAuthenticator{auth: authenticate}
+	groupsHandlers := groupspresentation.NewAPI(groupspresentation.Deps{
+		CreateGroup:  groupsapp.CreateGroup{Groups: groupsRepo, Directory: directory},
+		RenameGroup:  groupsapp.RenameGroup{Groups: groupsRepo},
+		DeleteGroup:  groupsapp.DeleteGroup{Groups: groupsRepo},
+		ListGroups:   groupsapp.ListGroups{Groups: groupsRepo},
+		GetGroup:     groupsapp.GetGroup{Groups: groupsRepo},
+		AddMember:    groupsapp.AddMember{Groups: groupsRepo, Directory: directory},
+		RemoveMember: groupsapp.RemoveMember{Groups: groupsRepo},
+		Authenticate: groupsAuth,
 	})
 
 	router := chi.NewMux()
@@ -61,7 +78,8 @@ func main() {
 		},
 	}
 	api := humachi.New(router, apiCfg)
-	presentation.Register(api, apiHandlers)
+	authpresentation.Register(api, authHandlers)
+	groupspresentation.Register(api, groupsHandlers)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -27,3 +27,30 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+  - engine: "postgresql"
+    queries: "internal/groups/infrastructure/sql/queries.sql"
+    schema: "internal/groups/infrastructure/sql/schema.sql"
+    gen:
+      go:
+        package: "groupssql"
+        out: "internal/groups/infrastructure/groupssql"
+        sql_package: "pgx/v5"
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - column: "users.blocked_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true

@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"traineebox/internal/groups/domain/ability"
+	"traineebox/internal/groups/domain/abilities"
 	"traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/value_objects"
 
@@ -48,7 +48,7 @@ func (g *Group) AddMember(
 	if err != nil {
 		return err
 	}
-	if err := ability.AddMember(actorRole, admin, account, role, g.hasMember(targetID)); err != nil {
+	if err := abilities.AddMember(actorRole, admin, account, role, g.hasMember(targetID)); err != nil {
 		return err
 	}
 	g.Members = append(g.Members, Member{
@@ -68,7 +68,7 @@ func (g *Group) RemoveMember(actorID uuid.UUID, admin bool, targetID uuid.UUID) 
 	if err != nil {
 		return err
 	}
-	if err := ability.RemoveMember(actorRole, admin, target.Role, g.ownerCount()); err != nil {
+	if err := abilities.RemoveMember(actorRole, admin, target.Role, g.ownerCount()); err != nil {
 		return err
 	}
 	members := make([]Member, 0, len(g.Members)-1)
@@ -86,7 +86,7 @@ func (g *Group) Rename(actorID uuid.UUID, admin bool, name value_objects.GroupNa
 	if err != nil {
 		return err
 	}
-	if err := ability.RenameGroup(actorRole, admin); err != nil {
+	if err := abilities.RenameGroup(actorRole, admin); err != nil {
 		return err
 	}
 	g.Name = name
@@ -98,7 +98,7 @@ func (g *Group) Delete(actorID uuid.UUID, admin bool) error {
 	if err != nil {
 		return err
 	}
-	return ability.DeleteGroup(actorRole, admin)
+	return abilities.DeleteGroup(actorRole, admin)
 }
 
 func (g Group) MemberOf(userID uuid.UUID) (Member, bool) {

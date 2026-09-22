@@ -3,11 +3,11 @@ package application
 import (
 	"context"
 
-	"traineebox/internal/auth/domain/repository"
+	"traineebox/internal/auth/domain/repositories"
 )
 
 type Logout struct {
-	Sessions repository.SessionRepository
+	Sessions repositories.SessionRepository
 }
 
 func (uc Logout) Execute(ctx context.Context, token string) error {

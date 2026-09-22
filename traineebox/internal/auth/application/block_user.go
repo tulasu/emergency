@@ -3,13 +3,13 @@ package application
 import (
 	"context"
 
-	"traineebox/internal/auth/domain/repository"
+	"traineebox/internal/auth/domain/repositories"
 
 	"github.com/google/uuid"
 )
 
 type BlockUser struct {
-	Users repository.UserRepository
+	Users repositories.UserRepository
 }
 
 func (uc BlockUser) Execute(ctx context.Context, id uuid.UUID, blocked bool) error {

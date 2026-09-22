@@ -1,10 +1,10 @@
-package ability_test
+package abilities_test
 
 import (
 	"errors"
 	"testing"
 
-	"traineebox/internal/groups/domain/ability"
+	"traineebox/internal/groups/domain/abilities"
 	"traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/value_objects"
 )
@@ -27,7 +27,7 @@ func TestAssignMemberRole(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ability.AssignMemberRole(tt.account, tt.desired)
+			err := abilities.AssignMemberRole(tt.account, tt.desired)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v want %v", err, tt.wantErr)
 			}
@@ -37,7 +37,7 @@ func TestAssignMemberRole(t *testing.T) {
 
 func TestAddMember(t *testing.T) {
 	t.Parallel()
-	err := ability.AddMember(
+	err := abilities.AddMember(
 		value_objects.MemberRoleTeacher,
 		false,
 		value_objects.AccountRoleTeacher,
@@ -48,7 +48,7 @@ func TestAddMember(t *testing.T) {
 		t.Fatalf("co-teacher add teacher: %v", err)
 	}
 
-	err = ability.AddMember(
+	err = abilities.AddMember(
 		value_objects.MemberRoleTeacher,
 		false,
 		value_objects.AccountRoleStudent,
@@ -59,7 +59,7 @@ func TestAddMember(t *testing.T) {
 		t.Fatalf("co-teacher add student: %v", err)
 	}
 
-	err = ability.AddMember(
+	err = abilities.AddMember(
 		value_objects.MemberRoleOwner,
 		false,
 		value_objects.AccountRoleStudent,
@@ -73,11 +73,11 @@ func TestAddMember(t *testing.T) {
 
 func TestRemoveMemberLastOwner(t *testing.T) {
 	t.Parallel()
-	err := ability.RemoveMember(value_objects.MemberRoleOwner, false, value_objects.MemberRoleOwner, 1)
+	err := abilities.RemoveMember(value_objects.MemberRoleOwner, false, value_objects.MemberRoleOwner, 1)
 	if !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("last owner: %v", err)
 	}
-	err = ability.RemoveMember(value_objects.MemberRoleOwner, false, value_objects.MemberRoleOwner, 2)
+	err = abilities.RemoveMember(value_objects.MemberRoleOwner, false, value_objects.MemberRoleOwner, 2)
 	if err != nil {
 		t.Fatalf("two owners: %v", err)
 	}

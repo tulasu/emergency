@@ -6,15 +6,15 @@ import (
 
 	"traineebox/internal/auth/domain/errs"
 	"traineebox/internal/auth/domain/models"
-	"traineebox/internal/auth/domain/repository"
+	"traineebox/internal/auth/domain/repositories"
 	"traineebox/internal/auth/domain/value_objects"
 
 	"github.com/google/uuid"
 )
 
 type Login struct {
-	Users      repository.UserRepository
-	Sessions   repository.SessionRepository
+	Users      repositories.UserRepository
+	Sessions   repositories.SessionRepository
 	Hasher     PasswordHasher
 	SessionTTL time.Duration
 }

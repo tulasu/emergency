@@ -5,14 +5,14 @@ import (
 
 	"traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/models"
-	"traineebox/internal/groups/domain/repository"
+	"traineebox/internal/groups/domain/repositories"
 	"traineebox/internal/groups/domain/value_objects"
 
 	"github.com/google/uuid"
 )
 
 type RenameGroup struct {
-	Groups repository.GroupRepository
+	Groups repositories.GroupRepository
 }
 
 type RenameGroupInput struct {
@@ -41,7 +41,7 @@ func (uc RenameGroup) Execute(ctx context.Context, in RenameGroupInput) (models.
 }
 
 type DeleteGroup struct {
-	Groups repository.GroupRepository
+	Groups repositories.GroupRepository
 }
 
 type DeleteGroupInput struct {
@@ -62,7 +62,7 @@ func (uc DeleteGroup) Execute(ctx context.Context, in DeleteGroupInput) error {
 }
 
 type ListGroups struct {
-	Groups repository.GroupRepository
+	Groups repositories.GroupRepository
 }
 
 type ListGroupsInput struct {
@@ -78,7 +78,7 @@ func (uc ListGroups) Execute(ctx context.Context, in ListGroupsInput) ([]models.
 }
 
 type GetGroup struct {
-	Groups repository.GroupRepository
+	Groups repositories.GroupRepository
 }
 
 type GetGroupInput struct {

@@ -6,12 +6,12 @@ import (
 
 	"traineebox/internal/auth/domain/errs"
 	"traineebox/internal/auth/domain/models"
-	"traineebox/internal/auth/domain/repository"
+	"traineebox/internal/auth/domain/repositories"
 )
 
 type Authenticate struct {
-	Users    repository.UserRepository
-	Sessions repository.SessionRepository
+	Users    repositories.UserRepository
+	Sessions repositories.SessionRepository
 }
 
 func (uc Authenticate) Execute(ctx context.Context, token string) (models.User, error) {

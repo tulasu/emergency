@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"traineebox/internal/auth/domain/models"
-	"traineebox/internal/auth/domain/repository"
+	"traineebox/internal/auth/domain/repositories"
 	"traineebox/internal/auth/domain/value_objects"
 
 	"github.com/google/uuid"
 )
 
 type CreateUser struct {
-	Users  repository.UserRepository
+	Users  repositories.UserRepository
 	Hasher PasswordHasher
 }
 

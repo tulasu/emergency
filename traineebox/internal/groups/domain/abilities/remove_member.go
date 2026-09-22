@@ -1,4 +1,4 @@
-package ability
+package abilities
 
 import (
 	"traineebox/internal/groups/domain/errs"

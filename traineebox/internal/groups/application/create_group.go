@@ -5,15 +5,15 @@ import (
 
 	"traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/models"
-	"traineebox/internal/groups/domain/repository"
+	"traineebox/internal/groups/domain/repositories"
 	"traineebox/internal/groups/domain/value_objects"
 
 	"github.com/google/uuid"
 )
 
 type CreateGroup struct {
-	Groups    repository.GroupRepository
-	Directory repository.UserDirectory
+	Groups    repositories.GroupRepository
+	Directory repositories.UserDirectory
 }
 
 type CreateGroupInput struct {

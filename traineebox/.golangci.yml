@@ -95,3 +95,42 @@ linters:
             - traineebox/internal/testkit
             - github.com/danielgtaylor/huma
             - github.com/google/uuid
+        tickets_domain:
+          files:
+            - "**/internal/tickets/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/tickets/domain
+            - github.com/google/uuid
+        tickets_application:
+          files:
+            - "**/internal/tickets/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/tickets/domain
+            - traineebox/internal/tickets/application
+            - github.com/google/uuid
+        tickets_infrastructure:
+          files:
+            - "**/internal/tickets/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/tickets/domain
+            - traineebox/internal/tickets/infrastructure
+            - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        tickets_presentation:
+          files:
+            - "**/internal/tickets/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/tickets/application
+            - traineebox/internal/tickets/domain
+            - traineebox/internal/tickets/presentation
+            - traineebox/internal/testkit
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid

@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"traineebox/internal/tickets/application/scoring"
 	"traineebox/internal/tickets/domain/errs"
 	"traineebox/internal/tickets/domain/models"
 	"traineebox/internal/tickets/domain/value_objects"
@@ -60,27 +59,23 @@ func TestAttemptExpireScoresDraft(t *testing.T) {
 	ref := models.ReferenceAnswer{
 		TicketID:       uuid.New(),
 		IncidentTypeID: typeID,
-		TagIDs:         nil,
-		ServiceIDs:     nil,
 	}
 	deadline := time.Now().UTC().Add(-time.Second)
 	attempt := models.NewAttempt(ref.TicketID, uuid.New(), 1, time.Now().UTC().Add(-time.Minute), &deadline)
 	ansType := typeID
-	_ = attempt.SaveDraft(models.NewAnswer(&ansType, nil, nil, "", "", "", "", ""), time.Now().UTC().Add(-time.Minute))
-	// SaveDraft after expire should fail; reset status for Expire test by constructing fresh
-	attempt = models.NewAttempt(ref.TicketID, uuid.New(), 1, time.Now().UTC().Add(-time.Minute), &deadline)
 	attempt.Answer = models.NewAnswer(&ansType, nil, nil, "", "", "", "", "")
 	now := time.Now().UTC()
 	if !attempt.IsExpired(now) {
 		t.Fatal("expected expired")
 	}
-	if err := attempt.Expire(now, ref, scoring.Score); err != nil {
+	scorer := func(models.ReferenceAnswer, models.Answer) (int, error) { return 42, nil }
+	if err := attempt.Expire(now, ref, scorer); err != nil {
 		t.Fatal(err)
 	}
 	if attempt.Status != value_objects.AttemptStatusTimedOut {
 		t.Fatalf("status = %s", attempt.Status)
 	}
-	if attempt.Score == nil || *attempt.Score < 1 {
+	if attempt.Score == nil || *attempt.Score != 42 {
 		t.Fatalf("score = %v", attempt.Score)
 	}
 }

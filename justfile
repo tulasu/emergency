@@ -1,7 +1,6 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 compose_file := "docker-compose.yml"
-version := trim(read("VERSION"))
 
 [private]
 default:
@@ -16,5 +15,5 @@ up: generate
 down:
     docker compose -f {{compose_file}} down
 
-build-app:
-    cd traineebox; go build -trimpath -ldflags="-s -w -X main.version={{version}}" -o ../bin/traineebox-app.exe ./cmd/app
+test:
+    cd traineebox; go test ./... -count=1 -timeout 10m

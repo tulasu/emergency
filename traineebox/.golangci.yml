@@ -40,6 +40,7 @@ linters:
             - traineebox/internal/auth/domain
             - traineebox/internal/auth/infrastructure
             - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
             - github.com/google/uuid
             - github.com/jackc/pgx
             - github.com/jackc/pgx/v5
@@ -52,5 +53,6 @@ linters:
             - traineebox/internal/auth/application
             - traineebox/internal/auth/domain
             - traineebox/internal/auth/presentation
+            - traineebox/internal/testkit
             - github.com/danielgtaylor/huma
             - github.com/google/uuid

@@ -24,3 +24,12 @@ docker-compose.yml
 
 # build output
 bin/
+
+# downloaded model archives (unpacked models live under dispatcher/models/, already ignored there)
+vosk-model-*.zip
+
+# external input data referenced from PLAN.md (МВД classifier, etc.)
+*.xlsx
+
+# stray editor/backup files
+*.bak

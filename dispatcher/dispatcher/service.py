@@ -30,6 +30,8 @@ class Service:
     device: str | None = None
     arbiter_kind: str | None = None
     thin_rescue: bool = False
+    ensemble: str | None = None  # majority | llm-lead … — голосование e5 + laya + LLM
+    improv: bool = False  # ответы вне сценария от LLM
 
     onto: Ontology = field(init=False)
     loaded: Loaded = field(init=False)
@@ -37,6 +39,8 @@ class Service:
     encoder: object = field(init=False, default=None)
     vectors: object = field(init=False, default=None)
     arbiter: object = field(init=False, default=None)
+    voters: list = field(init=False, default_factory=list)
+    improviser: object = field(init=False, default=None)
     sessions: dict[str, Session] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -73,6 +77,23 @@ class Service:
                 min_confidence=0.80,
             )
 
+        if self.ensemble:
+            from .nlu.laya_arbiter import LayaArbiter
+            from .nlu.llm_arbiter import LlmArbiter
+
+            # у голосующего laya порог ниже, чем у арбитра: её «не уверена»
+            # превращается в воздержание, а решает большинство
+            self.voters = [
+                self.arbiter if self.arbiter is not None else LayaArbiter(
+                    ontology=self.onto, device=self.device or "cpu",
+                    min_confidence=0.5),
+                LlmArbiter(self.onto),
+            ]
+        if self.improv:
+            from .dialog.improv import Improviser
+
+            self.improviser = Improviser()
+
     # ------------------------------------------------------------- 5 методов
 
     def open(self, scenario_id: str, session_id: str | None = None,
@@ -92,8 +113,14 @@ class Service:
             arbiter=self.arbiter,
             thin_rescue=self.thin_rescue and self.arbiter is not None,
         )
+        understander = cascade
+        if self.voters:
+            from .nlu.ensemble import Ensemble
+
+            understander = Ensemble(cascade, self.voters, rule=self.ensemble)
         sid = session_id or uuid.uuid4().hex
-        self.sessions[sid] = Session.open(sc, cascade, self.onto, seed)
+        self.sessions[sid] = Session.open(sc, understander, self.onto, seed)
+        self.sessions[sid].improv = self.improviser
         return sid, self.sessions[sid].opening()
 
     def _get(self, session_id: str) -> Session:

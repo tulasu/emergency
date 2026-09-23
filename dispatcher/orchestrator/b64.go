@@ -20,6 +20,33 @@ func unb64(s string) []byte {
 
 func deadline() time.Time { return time.Now().Add(2 * time.Second) }
 
+// pyOpen поднимает сессию в Python до originate, чтобы AudioSocket-листенер
+// (serve.py: иначе закрывает коннект на пустом SVC.sessions) нашёл её.
+func pyOpen(pyURL, scenario, sessionID string) error {
+	body, _ := json.Marshal(map[string]string{
+		"scenario_id": scenario, "session_id": sessionID,
+	})
+	resp, err := http.Post(pyURL+"/sessions/open", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("python unreachable: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("python open %s", resp.Status)
+	}
+	return nil
+}
+
+// pyClose дёргает /sessions/close, чтобы не оставлять зомби-сессию
+// при сбое originate / потере UDP-порта.
+func pyClose(pyURL, sessionID string) {
+	body, _ := json.Marshal(map[string]string{"session_id": sessionID})
+	resp, err := http.Post(pyURL+"/sessions/close", "application/json", bytes.NewReader(body))
+	if err == nil {
+		resp.Body.Close()
+	}
+}
+
 // pyOpenCheck проверяет сценарий до originate: 404 — звонить не будем.
 func pyOpenCheck(pyURL, scenario string) error {
 	body, _ := json.Marshal(map[string]string{"scenario_id": scenario})

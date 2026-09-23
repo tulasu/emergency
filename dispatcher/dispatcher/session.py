@@ -15,7 +15,7 @@ from .data.ontology import Ontology
 from .dialog.policy import decide
 from .dialog.render import Renderer
 from .dialog.state import CallState
-from .types import Reply, Scenario, Turn, Understander, Understanding
+from .types import Reply, Scenario, Style, Turn, Understander, Understanding
 
 
 @dataclass(slots=True)
@@ -25,6 +25,9 @@ class Session:
     renderer: Renderer
     state: CallState = field(default_factory=CallState)
     turns: list[Turn] = field(default_factory=list)
+
+    # ответ вне сценария (dialog/improv.py); None — всегда дежурное «не знаю»
+    improv: object | None = None
 
     # спекуляция: что уже посчитано по последней частичной гипотезе
     _draft_text: str = ""
@@ -84,6 +87,18 @@ class Session:
     def _advance(self, text: str, u: Understanding) -> Reply:
         d = decide(u, self.state, self.scenario)
         reply = self.renderer.say(d)
+        # вопрос с темой, но такого сведения у заявителя нет — отвечает LLM
+        # по ситуации; предусловия (ветка 3 политики) сюда не попадают: там
+        # u.keys не пуст, и «не знаю» стоит намеренно
+        if (self.improv is not None and d.style is Style.DONT_KNOW
+                and not u.keys and u.topical):
+            said = self.improv.reply(self.scenario, self.state.revealed, text,
+                                     self.turns, d.mood)
+            if said:
+                # без audio_id: плеер озвучит живым TTS, напоминание «Вы
+                # записали…» остаётся в тексте
+                urge = self.renderer.urge_text(d)
+                reply = Reply(f"{said} {urge}".strip(), None, d.style, d.mood)
         self.turns.append(Turn(len(self.turns) + 1, text, u, d, reply))
         return reply
 

@@ -41,6 +41,7 @@ class LayaArbiter:
     calls: int = 0
     refusals: int = 0
     failures: int = 0
+    last: str = ""  # что было на последнем вызове — для журнала звонка
 
     def __post_init__(self) -> None:
         if self.router is None:
@@ -65,8 +66,9 @@ class LayaArbiter:
                     }
                 },
             )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            # не роняем старт, но и не молчим: без весов laya всегда «ни о чём»
+            print(f"laya: прогрев не удался — {type(e).__name__}: {e}"[:300], flush=True)
 
     def _criterion(self, slot: str) -> str:
         """Чем слот отличается от соседей — это и есть критерий выбора."""
@@ -101,10 +103,11 @@ class LayaArbiter:
         }
         try:
             res = self.router.predict({FIELD: text}, question)
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             # модель не поднялась или не успела: каскад ответит «не знаю»,
             # звонок из-за арбитра не встаёт
             self.failures += 1
+            self.last = f"ошибка {type(e).__name__}: {e}"[:200]
             return None
 
         self.calls += 1
@@ -112,6 +115,7 @@ class LayaArbiter:
         pick = answer.get("choice")
         confidence = float(answer.get("confidence", 0.0))
 
+        self.last = f"{pick} {confidence:.2f}"
         if refused(pick, confidence, self.min_confidence):
             self.refusals += 1
             return None

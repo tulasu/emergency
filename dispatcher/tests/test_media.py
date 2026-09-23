@@ -51,8 +51,8 @@ class StubSession:
 
 
 def test_framing_roundtrip():
-    assert unpack(io.BytesIO(pack_audio(b"abc"))) == (0x00, b"abc")
-    assert unpack(io.BytesIO(b""))[0] == 0x01  # обрыв = hangup
+    assert unpack(io.BytesIO(pack_audio(b"abc"))) == (0x10, b"abc")
+    assert unpack(io.BytesIO(b""))[0] == 0x00  # обрыв = hangup
 
 
 def test_resample_doubles():

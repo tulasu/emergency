@@ -11,12 +11,14 @@
 
   python3 -m tools.train_encoder                    20 эпох, в models/e5-small-tuned
   python3 -m tools.train_encoder --epochs 30 --out models/e5-v2
+  python3 -m tools.train_encoder --stt-aug          + варианты «как пишет STT»
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
@@ -30,6 +32,27 @@ from dispatcher.data.ontology import Ontology
 
 SOURCE_PATH = "models/e5-small-torch"
 
+# Живой звонок отличается от корпуса формой, а не смыслом: STT пишет без
+# пунктуации, числа словами, оператор начинает с «алло, служба 112» или
+# «ага, хорошо». Каждой формулировке добавляется такой двойник того же слота.
+_LEADS = ["", "", "", "алло", "алло здравствуйте служба сто двенадцать",
+          "служба сто двенадцать", "хорошо", "ага хорошо", "я понял",
+          "так", "понятно", "ладно хорошо", "я вас понял"]
+_TAILS = ["", "", "", "пожалуйста"]
+
+
+def stt_style(q: str, rng: np.random.Generator, leads: bool = True) -> str:
+    """«Назовите адрес, дом 17?» -> «ага хорошо назовите адрес дом семнадцать»."""
+    from tools.synth_audio import speakable
+
+    text = speakable(q).lower().replace("ё", "е")
+    text = " ".join(re.sub(r"[^\w\s-]", " ", text).replace("-", " ").split())
+    if not leads:
+        return text
+    lead = _LEADS[rng.integers(len(_LEADS))]
+    tail = _TAILS[rng.integers(len(_TAILS))]
+    return " ".join(x for x in (lead, text, tail) if x)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -39,6 +62,10 @@ def main() -> None:
     ap.add_argument("--temp", type=float, default=0.05)
     ap.add_argument("--out", default="models/e5-small-tuned")
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--stt-aug", action="store_true",
+                    help="добавить к каждой формулировке вариант в стиле STT")
+    ap.add_argument("--no-leads", action="store_true",
+                    help="в STT-двойниках без «алло, служба 112» / «ага, хорошо»")
     args = ap.parse_args()
 
     onto = Ontology.load()
@@ -49,6 +76,9 @@ def main() -> None:
         for fact in sc.facts.values()
         for q in fact.questions
     ]
+    if args.stt_aug:
+        aug_rng = np.random.default_rng(1)
+        pairs += [(stt_style(q, aug_rng, leads=not args.no_leads), s) for q, s in pairs]
     slots = sorted({s for _, s in pairs})
     index = {s: i for i, s in enumerate(slots)}
     print(f"формулировок {len (pairs )}, слотов {len (slots )}")
@@ -112,6 +142,8 @@ def main() -> None:
                 "lr": args.lr,
                 "temp": args.temp,
                 "phrasings": len(pairs),
+                "stt_aug": args.stt_aug,
+                "stt_leads": args.stt_aug and not args.no_leads,
                 "slots": len(slots),
                 "scenarios": len(loaded.scenarios),
                 "seconds": round(time.perf_counter() - t0),

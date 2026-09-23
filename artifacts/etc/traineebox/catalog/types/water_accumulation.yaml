@@ -1,0 +1,20 @@
+code: water_accumulation
+title: Скопление воды
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: water_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: water_street
+        title: Улица
+      - code: water_basement
+        title: Подвал
+      - code: water_yard
+        title: Двор
+      - code: water_other
+        title: Прочее

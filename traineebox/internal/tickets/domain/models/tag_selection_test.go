@@ -5,68 +5,59 @@ import (
 
 	"traineebox/internal/tickets/domain/errs"
 	"traineebox/internal/tickets/domain/models"
-
-	"github.com/google/uuid"
 )
 
 func TestValidateTagSelection(t *testing.T) {
-	typeID := uuid.New()
-	whereGroupID := uuid.New()
-	streetID := uuid.New()
-	transportID := uuid.New()
-	signGroupID := uuid.New()
-	flameID := uuid.New()
-	smellID := uuid.New()
-
+	typeCode := "101"
 	groups := []models.IncidentTagGroup{
 		{
-			ID: whereGroupID, IncidentTypeID: typeID, Code: "where", Title: "Где",
+			IncidentTypeCode: typeCode, Code: "where", Title: "Где",
 			SelectionMode: models.TagSelectionSingle, SortOrder: 0,
 			Tags: []models.IncidentTag{
-				{ID: streetID, IncidentTypeID: typeID, GroupID: whereGroupID, Code: "street", Title: "Улица"},
-				{ID: transportID, IncidentTypeID: typeID, GroupID: whereGroupID, Code: "transport", Title: "Транспорт"},
+				{IncidentTypeCode: typeCode, GroupCode: "where", Code: "street", Title: "Улица"},
+				{IncidentTypeCode: typeCode, GroupCode: "where", Code: "transport", Title: "Транспорт"},
 			},
 		},
 		{
-			ID: signGroupID, IncidentTypeID: typeID, Code: "sign_street", Title: "Признак",
-			SelectionMode: models.TagSelectionSingle, ParentTagID: &streetID, SortOrder: 1,
+			IncidentTypeCode: typeCode, Code: "sign_street", Title: "Признак",
+			SelectionMode: models.TagSelectionSingle, ParentTagCode: "street", SortOrder: 1,
 			Tags: []models.IncidentTag{
-				{ID: flameID, IncidentTypeID: typeID, GroupID: signGroupID, Code: "flame", Title: "Пламя"},
-				{ID: smellID, IncidentTypeID: typeID, GroupID: signGroupID, Code: "smell", Title: "Запах"},
+				{IncidentTypeCode: typeCode, GroupCode: "sign_street", Code: "flame", Title: "Пламя"},
+				{IncidentTypeCode: typeCode, GroupCode: "sign_street", Code: "smell", Title: "Запах"},
 			},
 		},
 	}
 
 	t.Run("ok single and visible child", func(t *testing.T) {
-		err := models.ValidateTagSelection(&typeID, []uuid.UUID{streetID, flameID}, groups)
+		err := models.ValidateTagSelection(&typeCode, []string{"street", "flame"}, groups)
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("reject two in single group", func(t *testing.T) {
-		err := models.ValidateTagSelection(&typeID, []uuid.UUID{streetID, transportID}, groups)
+		err := models.ValidateTagSelection(&typeCode, []string{"street", "transport"}, groups)
 		if err != errs.ErrInvalidTagSelection {
 			t.Fatalf("got %v", err)
 		}
 	})
 
 	t.Run("reject child without parent", func(t *testing.T) {
-		err := models.ValidateTagSelection(&typeID, []uuid.UUID{flameID}, groups)
+		err := models.ValidateTagSelection(&typeCode, []string{"flame"}, groups)
 		if err != errs.ErrInvalidTagSelection {
 			t.Fatalf("got %v", err)
 		}
 	})
 
 	t.Run("reject foreign tag", func(t *testing.T) {
-		err := models.ValidateTagSelection(&typeID, []uuid.UUID{uuid.New()}, groups)
+		err := models.ValidateTagSelection(&typeCode, []string{"unknown"}, groups)
 		if err != errs.ErrInvalidTags {
 			t.Fatalf("got %v", err)
 		}
 	})
 
 	t.Run("tags without type", func(t *testing.T) {
-		err := models.ValidateTagSelection(nil, []uuid.UUID{streetID}, groups)
+		err := models.ValidateTagSelection(nil, []string{"street"}, groups)
 		if err != errs.ErrInvalidTags {
 			t.Fatalf("got %v", err)
 		}

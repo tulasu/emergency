@@ -1,71 +1,3 @@
--- name: ListIncidentTypes :many
-SELECT id, code, title
-FROM incident_types
-ORDER BY title;
-
--- name: ListTagGroupsByType :many
-SELECT id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order
-FROM incident_tag_groups
-WHERE incident_type_id = $1
-ORDER BY sort_order, title;
-
--- name: ListTagsByType :many
-SELECT id, incident_type_id, group_id, code, title, sort_order
-FROM incident_tags
-WHERE incident_type_id = $1
-ORDER BY sort_order, title;
-
--- name: ListServices :many
-SELECT id, code, title
-FROM emergency_services
-ORDER BY title;
-
--- name: GetIncidentTypeByID :one
-SELECT id, code, title
-FROM incident_types
-WHERE id = $1;
-
--- name: UpsertIncidentType :one
-INSERT INTO incident_types (id, code, title)
-VALUES ($1, $2, $3)
-ON CONFLICT (code) DO UPDATE SET title = EXCLUDED.title
-RETURNING id, code, title;
-
--- name: UpsertTagGroup :one
-INSERT INTO incident_tag_groups (id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (incident_type_id, code) DO UPDATE SET
-    title = EXCLUDED.title,
-    selection_mode = EXCLUDED.selection_mode,
-    parent_tag_id = EXCLUDED.parent_tag_id,
-    sort_order = EXCLUDED.sort_order
-RETURNING id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order;
-
--- name: UpsertIncidentTag :one
-INSERT INTO incident_tags (id, incident_type_id, group_id, code, title, sort_order)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (incident_type_id, code) DO UPDATE SET
-    group_id = EXCLUDED.group_id,
-    title = EXCLUDED.title,
-    sort_order = EXCLUDED.sort_order
-RETURNING id, incident_type_id, group_id, code, title, sort_order;
-
--- name: UpsertService :one
-INSERT INTO emergency_services (id, code, title)
-VALUES ($1, $2, $3)
-ON CONFLICT (code) DO UPDATE SET title = EXCLUDED.title
-RETURNING id, code, title;
-
--- name: ListTagIDsByType :many
-SELECT id
-FROM incident_tags
-WHERE incident_type_id = $1;
-
--- name: CountServicesByIDs :one
-SELECT count(*)::int AS count
-FROM emergency_services
-WHERE id = ANY($1::uuid[]);
-
 -- name: CreateTicket :exec
 INSERT INTO tickets (
     id, group_id, title, body, max_attempts,
@@ -89,11 +21,11 @@ ORDER BY created_at;
 
 -- name: UpsertReferenceAnswer :exec
 INSERT INTO ticket_reference_answers (
-    ticket_id, incident_type_id, applicant_last_name, applicant_first_name,
+    ticket_id, incident_type_code, applicant_last_name, applicant_first_name,
     caller_number, dictated_number
 ) VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (ticket_id) DO UPDATE SET
-    incident_type_id = EXCLUDED.incident_type_id,
+    incident_type_code = EXCLUDED.incident_type_code,
     applicant_last_name = EXCLUDED.applicant_last_name,
     applicant_first_name = EXCLUDED.applicant_first_name,
     caller_number = EXCLUDED.caller_number,
@@ -106,22 +38,22 @@ DELETE FROM reference_answer_tags WHERE ticket_id = $1;
 DELETE FROM reference_answer_services WHERE ticket_id = $1;
 
 -- name: InsertReferenceAnswerTag :exec
-INSERT INTO reference_answer_tags (ticket_id, tag_id) VALUES ($1, $2);
+INSERT INTO reference_answer_tags (ticket_id, tag_code) VALUES ($1, $2);
 
 -- name: InsertReferenceAnswerService :exec
-INSERT INTO reference_answer_services (ticket_id, service_id) VALUES ($1, $2);
+INSERT INTO reference_answer_services (ticket_id, service_code) VALUES ($1, $2);
 
 -- name: GetReferenceAnswer :one
-SELECT ticket_id, incident_type_id, applicant_last_name, applicant_first_name,
+SELECT ticket_id, incident_type_code, applicant_last_name, applicant_first_name,
        caller_number, dictated_number
 FROM ticket_reference_answers
 WHERE ticket_id = $1;
 
 -- name: ListReferenceAnswerTags :many
-SELECT tag_id FROM reference_answer_tags WHERE ticket_id = $1;
+SELECT tag_code FROM reference_answer_tags WHERE ticket_id = $1;
 
 -- name: ListReferenceAnswerServices :many
-SELECT service_id FROM reference_answer_services WHERE ticket_id = $1;
+SELECT service_code FROM reference_answer_services WHERE ticket_id = $1;
 
 -- name: CreateAttempt :exec
 INSERT INTO ticket_attempts (
@@ -130,7 +62,7 @@ INSERT INTO ticket_attempts (
 
 -- name: CreateAttemptAnswer :exec
 INSERT INTO attempt_answers (
-    attempt_id, incident_type_id, applicant_last_name, applicant_first_name,
+    attempt_id, incident_type_code, applicant_last_name, applicant_first_name,
     caller_number, dictated_number, notes, updated_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
@@ -140,16 +72,16 @@ FROM ticket_attempts
 WHERE id = $1;
 
 -- name: GetAttemptAnswer :one
-SELECT attempt_id, incident_type_id, applicant_last_name, applicant_first_name,
+SELECT attempt_id, incident_type_code, applicant_last_name, applicant_first_name,
        caller_number, dictated_number, notes, updated_at
 FROM attempt_answers
 WHERE attempt_id = $1;
 
 -- name: ListAttemptAnswerTags :many
-SELECT tag_id FROM attempt_answer_tags WHERE attempt_id = $1;
+SELECT tag_code FROM attempt_answer_tags WHERE attempt_id = $1;
 
 -- name: ListAttemptAnswerServices :many
-SELECT service_id FROM attempt_answer_services WHERE attempt_id = $1;
+SELECT service_code FROM attempt_answer_services WHERE attempt_id = $1;
 
 -- name: FindInProgressAttempt :one
 SELECT id, ticket_id, user_id, attempt_no, status, started_at, deadline_at, finished_at, score
@@ -179,7 +111,7 @@ WHERE id = $1;
 
 -- name: UpdateAttemptAnswer :exec
 UPDATE attempt_answers
-SET incident_type_id = $2,
+SET incident_type_code = $2,
     applicant_last_name = $3,
     applicant_first_name = $4,
     caller_number = $5,
@@ -195,10 +127,10 @@ DELETE FROM attempt_answer_tags WHERE attempt_id = $1;
 DELETE FROM attempt_answer_services WHERE attempt_id = $1;
 
 -- name: InsertAttemptAnswerTag :exec
-INSERT INTO attempt_answer_tags (attempt_id, tag_id) VALUES ($1, $2);
+INSERT INTO attempt_answer_tags (attempt_id, tag_code) VALUES ($1, $2);
 
 -- name: InsertAttemptAnswerService :exec
-INSERT INTO attempt_answer_services (attempt_id, service_id) VALUES ($1, $2);
+INSERT INTO attempt_answer_services (attempt_id, service_code) VALUES ($1, $2);
 
 -- name: GetMemberRole :one
 SELECT member_role

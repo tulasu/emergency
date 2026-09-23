@@ -1,0 +1,33 @@
+code: "103"
+title: "103"
+groups:
+  - code: what_103
+    title: Что случилось
+    selection_mode: single
+    tags:
+      - code: unconscious
+        title: Без сознания
+      - code: injury
+        title: Травма
+      - code: pain
+        title: Боль / недомогание
+      - code: breathing
+        title: Проблемы с дыханием
+      - code: other_103
+        title: Прочее
+  - code: threat_people
+    title: Угроза людям
+    selection_mode: single
+    tags:
+      - code: threat_people_yes
+        title: Да
+      - code: threat_people_no
+        title: Нет
+  - code: medical_help
+    title: Медицинская помощь
+    selection_mode: single
+    tags:
+      - code: medical_help_yes
+        title: Да
+      - code: medical_help_no
+        title: Нет

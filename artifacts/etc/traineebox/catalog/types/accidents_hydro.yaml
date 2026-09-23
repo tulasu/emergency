@@ -1,0 +1,20 @@
+code: accidents_hydro
+title: Аварии на гидротехнических сооружениях
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: hydro_kind
+    title: Вид
+    selection_mode: single
+    tags:
+      - code: dam
+        title: Плотина / дамба
+      - code: canal
+        title: Канал
+      - code: pump
+        title: Насосная станция
+      - code: other_hydro
+        title: Прочее

@@ -1,0 +1,13 @@
+code: social_assistance
+title: Социальная помощь
+groups:
+  - code: social_kind
+    title: Вид помощи
+    selection_mode: single
+    tags:
+      - code: social_alone
+        title: Одинокий / беспомощный
+      - code: social_homeless
+        title: Бездомный
+      - code: social_other
+        title: Прочее

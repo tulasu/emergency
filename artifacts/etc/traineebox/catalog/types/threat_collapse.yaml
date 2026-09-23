@@ -1,0 +1,18 @@
+code: threat_collapse
+title: Угроза обрушения
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: threat_col_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: tcol_building
+        title: Здание
+      - code: tcol_structure
+        title: Конструкция
+      - code: tcol_other
+        title: Прочее

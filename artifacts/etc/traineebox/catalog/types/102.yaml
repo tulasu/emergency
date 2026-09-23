@@ -1,0 +1,21 @@
+code: "102"
+title: "102"
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+  - offense
+groups:
+  - code: what_102
+    title: Что случилось
+    selection_mode: single
+    tags:
+      - code: crime
+        title: Преступление
+      - code: public_order
+        title: Нарушение общественного порядка
+      - code: domestic
+        title: Бытовой конфликт
+      - code: other_102
+        title: Прочее

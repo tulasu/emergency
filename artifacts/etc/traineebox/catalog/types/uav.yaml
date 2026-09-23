@@ -1,0 +1,18 @@
+code: uav
+title: БПЛА
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: uav_kind
+    title: Характер
+    selection_mode: single
+    tags:
+      - code: uav_sighting
+        title: Обнаружение
+      - code: uav_crash
+        title: Падение
+      - code: uav_threat
+        title: Угроза

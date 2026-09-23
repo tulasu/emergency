@@ -1,0 +1,13 @@
+code: gathering
+title: Сбор
+groups:
+  - code: gathering_kind
+    title: Характер
+    selection_mode: single
+    tags:
+      - code: crowd
+        title: Скопление людей
+      - code: rally
+        title: Мероприятие
+      - code: other_gathering
+        title: Прочее

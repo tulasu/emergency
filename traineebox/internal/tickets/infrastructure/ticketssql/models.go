@@ -13,7 +13,7 @@ import (
 
 type AttemptAnswer struct {
 	AttemptID          uuid.UUID
-	IncidentTypeID     *uuid.UUID
+	IncidentTypeCode   pgtype.Text
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -23,19 +23,13 @@ type AttemptAnswer struct {
 }
 
 type AttemptAnswerService struct {
-	AttemptID uuid.UUID
-	ServiceID uuid.UUID
+	AttemptID   uuid.UUID
+	ServiceCode string
 }
 
 type AttemptAnswerTag struct {
 	AttemptID uuid.UUID
-	TagID     uuid.UUID
-}
-
-type EmergencyService struct {
-	ID    uuid.UUID
-	Code  string
-	Title string
+	TagCode   string
 }
 
 type GroupMember struct {
@@ -44,39 +38,14 @@ type GroupMember struct {
 	MemberRole string
 }
 
-type IncidentTag struct {
-	ID             uuid.UUID
-	IncidentTypeID uuid.UUID
-	GroupID        uuid.UUID
-	Code           string
-	Title          string
-	SortOrder      int32
-}
-
-type IncidentTagGroup struct {
-	ID             uuid.UUID
-	IncidentTypeID uuid.UUID
-	Code           string
-	Title          string
-	SelectionMode  string
-	ParentTagID    pgtype.UUID
-	SortOrder      int32
-}
-
-type IncidentType struct {
-	ID    uuid.UUID
-	Code  string
-	Title string
-}
-
 type ReferenceAnswerService struct {
-	TicketID  uuid.UUID
-	ServiceID uuid.UUID
+	TicketID    uuid.UUID
+	ServiceCode string
 }
 
 type ReferenceAnswerTag struct {
 	TicketID uuid.UUID
-	TagID    uuid.UUID
+	TagCode  string
 }
 
 type Ticket struct {
@@ -106,7 +75,7 @@ type TicketAttempt struct {
 
 type TicketReferenceAnswer struct {
 	TicketID           uuid.UUID
-	IncidentTypeID     uuid.UUID
+	IncidentTypeCode   string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string

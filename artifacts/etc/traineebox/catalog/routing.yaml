@@ -1,0 +1,327 @@
+rules:
+- match:
+    type: '101'
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+  - tags_any:
+    - gas_yes
+    add:
+    - sluzhba_104
+  - tags_any:
+    - has_offense
+    add:
+    - sluzhba_102
+  - tags_any:
+    - medical_help_yes
+    add:
+    - sluzhba_103
+    - tsemp
+  - tags_any:
+    - no_access
+    add:
+    - sluzhba_101
+  - tags_any:
+    - threat_people_yes
+    add:
+    - tsemp
+- match:
+    type: '102'
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  - sluzhba_104
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: '103'
+  always:
+  - sluzhba_103
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: '104'
+  always:
+  - sluzhba_101
+  - sluzhba_104
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: accidents_city
+  always:
+  - moslift
+  - sluzhba_101
+  - sluzhba_102
+  - sluzhba_104
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: accidents_hazardous
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: accidents_hydro
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: accidents_transport
+  always:
+  - metro
+  - sluzhba_101
+  - sluzhba_103
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: animals
+  always:
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: child_in_danger
+  always:
+  - moslift
+  - sluzhba_101
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: collapse
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: ecological
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: explosion
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: fatal_outcome
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: natural_disaster
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: other
+  always:
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: person_in_danger
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  - sluzhba_103
+  - sluzhba_104
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: road_obstacles
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: social_assistance
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_103
+- match:
+    type: threat_collapse
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: threat_explosion
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: threat_hazardous_release
+  always:
+  - sluzhba_101
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: traffic_accident
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  when:
+  - tags_any:
+    - dtp_injured_yes
+    - medical_help_yes
+    - victims_yes
+    add:
+    - sluzhba_102
+    - sluzhba_103
+- match:
+    type: uav
+  always:
+  - sluzhba_101
+  - sluzhba_102
+  when:
+  - tags_any:
+    - threat_people_yes
+    add:
+    - tsemp
+  - tags_any:
+    - medical_help_yes
+    add:
+    - sluzhba_103

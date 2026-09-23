@@ -1,0 +1,20 @@
+code: child_in_danger
+title: Ребенок в опасности
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: child_situation
+    title: Ситуация
+    selection_mode: single
+    tags:
+      - code: child_locked
+        title: Закрыт / заперт
+      - code: child_lost
+        title: Потерялся
+      - code: child_injury
+        title: Травма
+      - code: child_other
+        title: Прочее

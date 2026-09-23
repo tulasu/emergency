@@ -1,0 +1,21 @@
+code: threat_explosion
+title: Угроза взрыва/террористического акта
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+  - offense
+groups:
+  - code: threat_exp_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: tex_building
+        title: Здание
+      - code: tex_transport
+        title: Транспорт
+      - code: tex_street
+        title: Улица
+      - code: tex_other
+        title: Прочее

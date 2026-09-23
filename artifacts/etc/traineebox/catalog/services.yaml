@@ -1,0 +1,423 @@
+services:
+  - code: sluzhba_101
+    title: Служба 101 (ГУ МЧС России по г.Москве, ГКУ "Пожарно спасательный центр" ОДС)
+  - code: fsb
+    title: ФСБ
+  - code: tsemp
+    title: ЦЭМП
+  - code: sluzhba_103
+    title: Служба 103 (ГБУ города Москвы Станция скорой и неотложной медицинской помощи им. А.С. Пучкова)
+  - code: sluzhba_104
+    title: Служба 104 (АО "МОСГАЗ" Диспетчерское управление)
+  - code: ogdts
+    title: ОГДЦ
+  - code: tsodd
+    title: ЦОДД (ГКУ "Центр организации дорожного движения")
+  - code: gormost
+    title: Гормост (Гормост)
+  - code: mosgortrans
+    title: Мосгортранс
+  - code: avtodorogi
+    title: Автодороги
+  - code: mosvodokanal
+    title: Мосводоканал (АО "Мосводоканал")
+  - code: rosseti_mr
+    title: Россети МР
+  - code: moek
+    title: МОЭК
+  - code: dep_zhkh
+    title: Деп. ЖКХ (Департамент ЖКХ)
+  - code: metro
+    title: Метро
+  - code: asu_ns
+    title: АСУ НС (Автоматизированная система управления)
+  - code: mos_bez
+    title: Мос.Без. (Московская Безопасность)
+  - code: 112_mos_obl
+    title: 112 Мос. обл. (112 Московской области)
+  - code: fgup_rsvo
+    title: ФГУП РСВО (Российские сети вещания и оповещения)
+  - code: oek
+    title: ОЭК (Объединенная энергетическая компания)
+  - code: moslift
+    title: Мослифт (Лифт МСК)
+  - code: mosvodostok
+    title: Мосводосток (Мосводосток)
+  - code: moskollektor
+    title: Москоллектор (Москоллектор)
+  - code: voen_komendatura
+    title: Воен. комендатура (Воен. комендатура)
+  - code: poselenie_chertanovo_severnoe
+    title: Поселение Чертаново Северное (ДДС района Чертаново Северное города Москвы)
+  - code: poselenie_akademicheskiy
+    title: Поселение Академический (ДДС Академического района города Москвы)
+  - code: poselenie_lomonosovskiy
+    title: Поселение Ломоносовский (ДДС Ломоносовского района города Москвы)
+  - code: poselenie_bibirevo
+    title: Поселение Бибирево (ДДС района Бибирево города Москвы)
+  - code: poselenie_yuvao
+    title: Поселение ЮВАО (ДДС префектуры Юго-Восточного административного округа города Москвы)
+  - code: poselenie_vao
+    title: Поселение ВАО (ДДС префектуры Восточного административного округа города Москвы)
+  - code: poselenie_zamoskvoreche
+    title: Поселение Замоскворечье (ДДС района Замоскворечье города Москвы)
+  - code: poselenie_zyablikovo
+    title: Поселение Зябликово (ДДС района Зябликово города Москвы)
+  - code: poselenie_silino
+    title: Поселение Силино (ДДС района Силино города Москвы)
+  - code: oati
+    title: ОАТИ (Объединение Административно-Технических Инспекций города Москвы)
+  - code: gbu_msppn
+    title: ГБУ МСППН (Московская служба психологической помощи населению ГБУ города Москвы)
+  - code: upr_rayona_veshnyaki
+    title: Упр. района Вешняки (ДДС района Вешняки города Москвы)
+  - code: poselenie_kryukovo
+    title: Поселение Крюково (ДДС района Крюково города Москвы)
+  - code: poselenie_matushkino
+    title: Поселение Матушкино (ДДС района Матушкино города Москвы)
+  - code: poselenie_novogireevo
+    title: Поселение Новогиреево (ДДС района Новогиреево города Москвы)
+  - code: poselenie_savelki
+    title: Поселение Савелки (ДДС района Савелки города Москвы)
+  - code: poselenie_staroe_kryukovo
+    title: Поселение Старое Крюково (ДДС района Старое Крюково города Москвы)
+  - code: poselenie_chertanovo_yuzhnoe
+    title: Поселение Чертаново Южное (ДДС района Чертаново Южное города Москвы)
+  - code: poselenie_teplyy_stan
+    title: Поселение Теплый Стан (ДДС района Теплый Стан города Москвы)
+  - code: poselenie_ryazanskiy
+    title: Поселение Рязанский (ДДС Рязанского района города Москвы)
+  - code: poselenie_zelao
+    title: Поселение ЗелАО (ДДС префектуры Зеленоградского административного округа города Москвы)
+  - code: poselenie_pechatniki
+    title: Поселение Печатники (ДДС района Печатники города Москвы)
+  - code: poselenie_sao
+    title: Поселение САО (ДДС префектуры Северного административного округа города Москвы)
+  - code: poselenie_novokosino
+    title: Поселение Новокосино (ДДС района Новокосино города Москвы)
+  - code: poselenie_tsaritsyno
+    title: Поселение Царицыно (ДДС района Царицыно города Москвы)
+  - code: poselenie_marino
+    title: Поселение Марьино (ДДС района Марьино города Москвы)
+  - code: poselenie_kuzminki
+    title: Поселение Кузьминки (ДДС района Кузьминки города Москвы)
+  - code: poselenie_mitino
+    title: Поселение Митино (ДДС района Митино города Москвы)
+  - code: poselenie_savelovskiy
+    title: Поселение Савеловский (ДДС Савеловского района города Москвы)
+  - code: poselenie_schukino
+    title: Поселение Щукино (ДДС района Щукино города Москвы)
+  - code: poselenie_pokrovskoe_streshnevo
+    title: Поселение Покровское-Стрешнево (ДДС района Покровское-Стрешнево города Москвы)
+  - code: poselenie_pervomayskoe
+    title: Поселение Первомайское (ДДС поселения Первомайское в городе Москве)
+  - code: mzhd
+    title: МЖД (Московская железная дорога)
+  - code: 112_kal_obl
+    title: 112 Кал. обл. (112 Калужская область)
+  - code: poselenie_severnoe_tushino
+    title: Поселение Северное Тушино (ДДС района Северное Тушино города Москвы)
+  - code: poselenie_nagatinskiy_zaton
+    title: Поселение Нагатинский Затон (ДДС района Нагатинский Затон города Москвы)
+  - code: poselenie_dorogomilovo
+    title: Поселение Дорогомилово (ДДС района Дорогомилово города Москвы)
+  - code: poselenie_koptevo
+    title: Поселение Коптево (ДДС района Коптево города Москвы)
+  - code: poselenie_krylatskoe
+    title: Поселение Крылатское (ДДС района Крылатское города Москвы)
+  - code: poselenie_tverskoy
+    title: Поселение Тверской (ДДС Тверского района города Москвы)
+  - code: poselenie_vnukovo
+    title: Поселение Внуково (ДДС района Внуково города Москвы)
+  - code: poselenie_yaroslavskiy
+    title: Поселение Ярославский (ДДС Ярославского района города Москвы)
+  - code: poselenie_yuao
+    title: Поселение ЮАО (ДДС префектуры Южного административного округа города Москвы)
+  - code: poselenie_mihaylovo_yartsevskoe
+    title: Поселение Михайлово-Ярцевское (ДДС поселения Михайлово-Ярцевское города Москвы)
+  - code: poselenie_nekrasovka
+    title: Поселение Некрасовка (ДДС района Некрасовка города Москвы)
+  - code: poselenie_vyhino_zhulebino
+    title: Поселение Выхино-Жулебино (ДДС района Выхино-Жулебино города Москвы)
+  - code: poselenie_moskvoreche_saburovo
+    title: Поселение Москворечье-Сабурово (ДДС района Москворечье-Сабурово города Москвы)
+  - code: poselenie_yuzao
+    title: Поселение ЮЗАО (ДДС префектуры Юго-Западного административного округа города Москвы)
+  - code: poselenie_donskoy
+    title: Поселение Донской (ДДС Донского района города Москвы)
+  - code: poselenie_kurkino
+    title: Поселение Куркино (ДДС района Куркино города Москвы)
+  - code: poselenie_yuzhnoe_butovo
+    title: Поселение Южное Бутово (ДДС района Южное Бутово города Москвы)
+  - code: poselenie_lianozovo
+    title: Поселение Лианозово (ДДС района Лианозово города Москвы)
+  - code: dep_obr
+    title: Деп. Обр. (Московский Департамент Образования)
+  - code: poselenie_lefortovo
+    title: Поселение Лефортово (ДДС района Лефортово города Москвы)
+  - code: poselenie_svao
+    title: Поселение СВАО (ДДС префектуры Северо-Восточного административного округа города Москвы)
+  - code: poselenie_sokolniki
+    title: Поселение Сокольники (ДДС района Сокольники города Москвы)
+  - code: poselenie_izmaylovo
+    title: Поселение Измайлово (ДДС района Измайлово города Москвы)
+  - code: poselenie_bogorodskoe
+    title: Поселение Богородское (ДДС района Богородское города Москвы)
+  - code: poselenie_preobrazhenskoe
+    title: Поселение Преображенское (ДДС района Преображенское города Москвы)
+  - code: poselenie_vostochnoe_izmaylovo
+    title: Поселение Восточное Измайлово (ДДС района Восточное Измайлово города Москвы)
+  - code: poselenie_rostokino
+    title: Поселение Ростокино (ДДС района Ростокино города Москвы)
+  - code: poselenie_sokolinaya_gora
+    title: Поселение Соколиная гора (ДДС района Соколиная гора города Москвы)
+  - code: poselenie_horoshevo_mnevniki
+    title: Поселение Хорошево-Мневники (ДДС района Хорошево-Мневники города Москвы)
+  - code: poselenie_golyanovo
+    title: Поселение Гольяново (ДДС района Гольяново города Москвы)
+  - code: poselenie_severnoe_izmaylovo
+    title: Поселение Северное Измайлово (ДДС района Северное Измайлово города Москвы)
+  - code: poselenie_marfino
+    title: Поселение Марфино (ДДС района Марфино города Москвы)
+  - code: poselenie_metrogorodok
+    title: Поселение Метрогородок (ДДС района Метрогородок города Москвы)
+  - code: poselenie_fili_davydkovo
+    title: Поселение Фили-Давыдково (ДДС района Фили-Давыдково города Москвы)
+  - code: poselenie_yuzhnoe_medvedkovo
+    title: Поселение Южное Медведково (ДДС района Южное Медведково города Москвы)
+  - code: poselenie_ryazanovskoe
+    title: Поселение Рязановское (ДДС поселения Рязановское в городе Москве)
+  - code: dep_prirodopolzovaniya
+    title: Деп. природопользования (Департамент природопользования и охраны окружающей среды города Москвы)
+  - code: poselenie_timiryazevskiy
+    title: Поселение Тимирязевский (ДДС Тимирязевского района города Москвы)
+  - code: poselenie_biryulevo_zapadnoe
+    title: Поселение Бирюлево Западное (ДДС района Бирюлево Западное города Москвы)
+  - code: poselenie_ivanovskiy
+    title: Поселение Ивановский (ДДС Ивановского района города Москвы)
+  - code: poselenie_novo_peredelkino
+    title: Поселение Ново-Переделкино (ДДС района Ново-Переделкино города Москвы)
+  - code: poselenie_vostochnoe_degunino
+    title: Поселение Восточное Дегунино (ДДС района Восточное Дегунино города Москвы)
+  - code: poselenie_hovrino
+    title: Поселение Ховрино (ДДС района Ховрино города Москвы)
+  - code: poselenie_golovinskiy
+    title: Поселение Головинский (ДДС Головинского района города Москвы)
+  - code: poselenie_beskudnikovo
+    title: Поселение Бескудниково (ДДС Бескудниковского района города Москвы)
+  - code: poselenie_levoberezhnyy
+    title: Поселение Левобережный (ДДС района Левобережный города Москвы)
+  - code: poselenie_dmitrovskiy
+    title: Поселение Дмитровский (ДДС Дмитровского района города Москвы)
+  - code: poselenie_sokol
+    title: Поселение Сокол (ДДС района Сокол города Москвы)
+  - code: poselenie_molzhaninovskiy
+    title: Поселение Молжаниновский (ДДС Молжаниновского района города Москвы)
+  - code: poselenie_hamovniki
+    title: Поселение Хамовники (ДДС района Хамовники города Москвы)
+  - code: poselenie_basmannyy
+    title: Поселение Басманный (ДДС Басманного района города Москвы)
+  - code: poselenie_yakimanka
+    title: Поселение Якиманка (ДДС района Якиманка города Москвы)
+  - code: poselenie_meschanskiy
+    title: Поселение Мещанский (ДДС Мещанского района города Москвы)
+  - code: poselenie_presnenskiy
+    title: Поселение Пресненский (ДДС Пресненского района города Москвы)
+  - code: sluzhba_102
+    title: Служба 102 (Дежурная часть ГУ МВД России по г.Москве)
+  - code: poselenie_mosrentgen
+    title: Поселение Мосрентген (ДДС поселения «Мосрентген» в городе Москве)
+  - code: poselenie_yasenevo
+    title: Поселение Ясенево (ДДС района Ясенево города Москвы)
+  - code: mgts
+    title: МГТС (Московская городская телефонная сеть)
+  - code: poselenie_scherbinka
+    title: Поселение Щербинка (ДДС городского округа Щербинка города Москвы)
+  - code: poselenie_kapotnya
+    title: Поселение Капотня (ДДС района Капотня города Москвы)
+  - code: poselenie_troitsk
+    title: Поселение Троицк (ДДС городского округа Троицк города Москвы)
+  - code: poselenie_nagatino_sadovniki
+    title: Поселение Нагатино-Садовники (ДДС района Нагатино-Садовники города Москвы)
+  - code: poselenie_klenovskoe
+    title: Поселение Клёновское (ДДС поселения Клёновское в городе Москве)
+  - code: poselenie_nagornyy
+    title: Поселение Нагорный (ДДС района Нагорный города Москвы)
+  - code: poselenie_babushkinskiy
+    title: Поселение Бабушкинский (ДДС Бабушкинского района города Москвы)
+  - code: poselenie_butyrskiy
+    title: Поселение Бутырский (ДДС Бутырского района города Москвы)
+  - code: poselenie_losinoostrovskiy
+    title: Поселение Лосиноостровский (ДДС Лосиноостровского района города Москвы)
+  - code: poselenie_ostankinskiy
+    title: Поселение Останкинский (ДДС Останкинского района города Москвы)
+  - code: poselenie_otradnoe
+    title: Поселение Отрадное (ДДС района Отрадное города Москвы)
+  - code: poselenie_sviblovo
+    title: Поселение Свиблово (ДДС района Свиблово города Москвы)
+  - code: poselenie_severnoe_medvedkovo
+    title: Поселение Северное Медведково (ДДС района Северное Медведково города Москвы)
+  - code: poselenie_severnyy
+    title: Поселение Северный (ДДС района Северный города Москвы)
+  - code: poselenie_orehovo_borisovo_severnoe
+    title: Поселение Орехово-Борисово Северное (ДДС района Орехово-Борисово Северное города Москвы)
+  - code: poselenie_perovo
+    title: Поселение Перово (ДДС района Перово города Москвы)
+  - code: poselenie_altufevskiy
+    title: Поселение Алтуфьевский (ДДС Алтуфьевского района города Москвы)
+  - code: poselenie_mozhayskiy
+    title: Поселение Можайский (ДДС Можайского района города Москвы)
+  - code: poselenie_ramenki
+    title: Поселение Раменки (ДДС района Раменки города Москвы)
+  - code: poselenie_alekseevskiy
+    title: Поселение Алексеевский (ДДС Алексеевского района города Москвы)
+  - code: poselenie_kuntsevo
+    title: Поселение Кунцево (ДДС района Кунцево города Москвы)
+  - code: poselenie_troparevo_nikulino
+    title: Поселение Тропарево-Никулино (ДДС района Тропарево-Никулино города Москвы)
+  - code: poselenie_vostochnyy
+    title: Поселение Восточный (ДДС района Восточный города Москвы)
+  - code: poselenie_aeroport
+    title: Поселение Аэропорт (ДДС района Аэропорт города Москвы)
+  - code: poselenie_zapadnoe_degunino
+    title: Поселение Западное Дегунино (ДДС района Западное Дегунино города Москвы)
+  - code: poselenie_voykovskiy
+    title: Поселение Войковский (ДДС Войковского района города Москвы)
+  - code: poselenie_horoshevskiy
+    title: Поселение Хорошевский (ДДС Хорошевского района города Москвы)
+  - code: poselenie_begovoy
+    title: Поселение Беговой (ДДС района Беговой города Москвы)
+  - code: poselenie_tekstilschiki
+    title: Поселение Текстильщики (ДДС района Текстильщики города Москвы)
+  - code: poselenie_moskovskiy
+    title: Поселение Московский (ДДС поселения Московский в городе Москве)
+  - code: poselenie_brateevo
+    title: Поселение Братеево (ДДС района Братеево города Москвы)
+  - code: poselenie_filimonkovskoe
+    title: Поселение Филимонковское (ДДС поселения Филимонковское в городе Москве)
+  - code: kanal_im_moskvy
+    title: Канал им. Москвы (ФГБУ "Канал имени Москвы")
+  - code: poselenie_lyublino
+    title: Поселение Люблино (ДДС района Люблино города Москвы)
+  - code: poselenie_marushkinskoe
+    title: Поселение Марушкинское (ДДС поселения Марушкинское в городе Москве)
+  - code: dep_truda_i_sots_zaschity
+    title: Деп. труда и соц.защиты (Департамент труда и социальной защиты населения города Москвы)
+  - code: poselenie_orehovo_borisovo_yuzhnoe
+    title: Поселение Орехово-Борисово Южное (ДДС района Орехово-Борисово Южное города Москвы)
+  - code: poselenie_danilovskiy
+    title: Поселение Даниловский (ДДС Даниловского района города Москвы)
+  - code: poselenie_rogovskoe
+    title: Поселение Роговское (ДДС поселения Роговское в городе Москве)
+  - code: poselenie_zao
+    title: Поселение ЗАО (ДДС префектуры Западного административного округа города Москвы)
+  - code: poselenie_nizhegorodskiy
+    title: Поселение Нижегородский (ДДС Нижегородского района города Москвы)
+  - code: poselenie_schapovskoe
+    title: Поселение Щаповское (ДДС поселения Щаповское в городе Москве)
+  - code: poselenie_yuzhnoportovyy
+    title: Поселение Южнопортовый (ДДС Южнопортового района города Москвы)
+  - code: evazhd
+    title: ЭВАЖД (ГБУ "Учреждение по эксплуатации высотных административных и жилых домов")
+  - code: poselenie_tsao
+    title: Поселение ЦАО (ДДС префектуры Центрального административного округа города Москвы)
+  - code: poselenie_cheremushki
+    title: Поселение Черемушки (ДДС района Черемушки города Москвы)
+  - code: poselenie_marina_roscha
+    title: Поселение Марьина роща (ДДС района Марьина роща города Москвы)
+  - code: poselenie_krasnoselskiy
+    title: Поселение Красносельский (ДДС Красносельского района города Москвы)
+  - code: poselenie_strogino
+    title: Поселение Строгино (ДДС района Строгино города Москвы)
+  - code: poselenie_szao
+    title: Поселение СЗАО (ДДС префектуры Северо-Западного административного округа города Москвы)
+  - code: poselenie_biryulevo_vostochnoe
+    title: Поселение Бирюлево Восточное (ДДС района Бирюлево Восточное города Москвы)
+  - code: poselenie_chertanovo_tsentralnoe
+    title: Поселение Чертаново Центральное (ДДС района Чертаново Центральное города Москвы)
+  - code: poselenie_gagarinskiy
+    title: Поселение Гагаринский (ДДС Гагаринского района города Москвы)
+  - code: poselenie_obruchevskiy
+    title: Поселение Обручевский (ДДС Обручевского района города Москвы)
+  - code: poselenie_zyuzino
+    title: Поселение Зюзино (ДДС района Зюзино города Москвы)
+  - code: poselenie_konkovo
+    title: Поселение Коньково (ДДС района Коньково города Москвы)
+  - code: poselenie_kotlovka
+    title: Поселение Котловка (ДДС района Котловка города Москвы)
+  - code: poselenie_severnoe_butovo
+    title: Поселение Северное Бутово (ДДС района Северное Бутово города Москвы)
+  - code: poselenie_kosino_uhtomskiy
+    title: Поселение Косино-Ухтомский (ДДС района Косино-Ухтомский города Москвы)
+  - code: poselenie_solntsevo
+    title: Поселение Солнцево (ДДС района Солнцево города Москвы)
+  - code: poselenie_taganskiy
+    title: Поселение Таганский (ДДС района Таганский города Москвы)
+  - code: poselenie_ochakovo_matveevskoe
+    title: Поселение Очаково-Матвеевское (ДДС района Очаково-Матвеевское города Москвы)
+  - code: poselenie_yuzhnoe_tushino
+    title: Поселение Южное Тушино (ДДС района Южное Тушино города Москвы)
+  - code: poselenie_filevskiy_park
+    title: Поселение Филевский парк (ДДС района Филевский парк города Москвы)
+  - code: poselenie_tinao
+    title: Поселение ТИНАО (ДДС префектуры Троицкого и Новомосковского округов города Москвы)
+  - code: poselenie_prospekt_vernadskogo
+    title: Поселение Проспект Вернадского (ДДС района Проспект Вернадского города Москвы)
+  - code: poselenie_desenovskoe
+    title: Поселение Десеновское (ДДС поселения Десеновское в городе Москве)
+  - code: poselenie_arbat
+    title: Поселение Арбат (ДДС района Арбат города Москвы)
+  - code: dezhurno_dispetcherskaya_sluzhba
+    title: Дежурно-диспетчерская служба (Дежурно-диспетчерская служба)
+  - code: poselenie_sosenskoe
+    title: Поселение Сосенское (ДДС поселения Сосенское в городе Москве)
+  - code: poselenie_kokoshkino
+    title: Поселение Кокошкино (ДДС поселения Кокошкино в городе Москве)
+  - code: tsentrregionvodhoz
+    title: Центррегионводхоз (Центррегионводхоз)
+  - code: poselenie_voskresenskoe
+    title: Поселение Воскресенское (ДДС поселения Воскресенское в городе Москве)
+  - code: poselenie_krasnopahorskoe
+    title: Поселение Краснопахорское (ДДС поселения Краснопахорское в городе Москве)
+  - code: poselenie_voronovskoe
+    title: Поселение Вороновское (ДДС поселения Вороновское в городе Москве)
+  - code: mosoblgaz
+    title: Мособлгаз (Мособлгаз)
+  - code: poselenie_vnukovskoe
+    title: Поселение Внуковское (ДДС поселения Внуковское города Москвы)
+  - code: poselenie_novofedorovskoe
+    title: Поселение Новофедоровское (ДДС поселения Новофедоровское города Москвы)
+  - code: poselenie_kievskiy
+    title: Поселение Киевский (ДДС поселения Киевский города Москвы)
+  - code: gbu_ad_vao
+    title: ГБУ АД ВАО (ГБУ Автодороги ВАО)
+  - code: gbu_ad_svao
+    title: ГБУ АД СВАО (ГБУ Автодороги СВАО)
+  - code: gbu_ad_yuvao
+    title: ГБУ АД ЮВАО (ГБУ Автодороги ЮВАО)
+  - code: gbu_ad_zelao
+    title: ГБУ АД ЗелАО (ГБУ Автодороги ЗелАО)
+  - code: gbu_ad_yuzao
+    title: ГБУ АД ЮЗАО (ГБУ Автодороги ЮЗАО)
+  - code: gbu_ad_yuao
+    title: ГБУ АД ЮАО (ГБУ Автодороги ЮАО)
+  - code: gbu_ad_sao
+    title: ГБУ АД САО (ГБУ Автодороги САО)
+  - code: gbu_ad_szao
+    title: ГБУ АД СЗАО (ГБУ Автодороги СЗАО)
+  - code: gbu_ad_tsao
+    title: ГБУ АД ЦАО (ГБУ Автодороги ЦАО)
+  - code: gbu_ad_zao
+    title: ГБУ АД ЗАО (ГБУ Автодороги ЗАО)
+  - code: departament_kultury_goroda_moskvy
+    title: Департамент культуры города Москвы (Департамент культуры города Москвы)
+  - code: gku_tssa
+    title: ГКУ ЦСА (Центр социальной помощи)
+  - code: mosturizm
+    title: Мостуризм (Комитет по туризму города Москвы)
+  - code: departament_stroitelstva
+    title: Департамент строительства (Департамент строительства)
+  - code: komitet_veterinarii
+    title: Комитет ветеринарии (Комитет ветеринарии города Москвы)
+  - code: moszhilinspektsiya
+    title: Мосжилинспекция (Государственная жилищная инспекция города Москвы)

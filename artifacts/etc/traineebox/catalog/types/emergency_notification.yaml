@@ -1,0 +1,13 @@
+code: emergency_notification
+title: Уведомление о ЧС
+groups:
+  - code: chs_kind
+    title: Характер
+    selection_mode: single
+    tags:
+      - code: chs_info
+        title: Информирование
+      - code: chs_warning
+        title: Предупреждение
+      - code: chs_other
+        title: Прочее

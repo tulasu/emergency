@@ -1,0 +1,28 @@
+code: traffic_accident
+title: ДТП
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: dtp_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: dtp_road
+        title: Проезжая часть
+      - code: dtp_yard
+        title: Двор
+      - code: dtp_parking
+        title: Парковка
+      - code: dtp_other
+        title: Прочее
+  - code: dtp_injured
+    title: Пострадавшие
+    selection_mode: single
+    tags:
+      - code: dtp_injured_yes
+        title: Да
+      - code: dtp_injured_no
+        title: Нет

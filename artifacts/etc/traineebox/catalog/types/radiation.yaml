@@ -1,0 +1,18 @@
+code: radiation
+title: Радиация
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: radiation_kind
+    title: Характер
+    selection_mode: single
+    tags:
+      - code: rad_source
+        title: Источник
+      - code: rad_leak
+        title: Утечка / выброс
+      - code: rad_suspected
+        title: Подозрение

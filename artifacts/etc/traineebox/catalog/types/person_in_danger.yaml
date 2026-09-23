@@ -1,0 +1,20 @@
+code: person_in_danger
+title: Человек в опасности
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: person_situation
+    title: Ситуация
+    selection_mode: single
+    tags:
+      - code: person_trapped
+        title: Заблокирован
+      - code: person_fall
+        title: Падение / высота
+      - code: person_water
+        title: Водоем
+      - code: person_other
+        title: Прочее

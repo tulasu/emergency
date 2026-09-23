@@ -1,0 +1,159 @@
+code: "101"
+title: "101"
+groups:
+  - code: where
+    title: Где
+    selection_mode: single
+    tags:
+      - code: where_street
+        title: Улица
+      - code: where_transport
+        title: Транспорт
+      - code: where_home
+        title: Дом
+      - code: where_building
+        title: Здание / объект
+      - code: where_hazard
+        title: Опасный объект
+  - code: fire_sign_street
+    title: Признак пожара (улица)
+    selection_mode: single
+    parent_tag: where_street
+    tags:
+      - code: street_flame_smoke
+        title: Открытое пламя / Дым
+      - code: street_burn_smell
+        title: Запах гари
+  - code: fire_sign_transport
+    title: Признак пожара (транспорт)
+    selection_mode: single
+    parent_tag: where_transport
+    tags:
+      - code: transport_flame_smoke
+        title: Открытое пламя / Дым
+      - code: transport_alarm
+        title: Сработала пожарная сигнализация
+  - code: access
+    title: Доступ
+    selection_mode: multi
+    tags:
+      - code: no_access
+        title: Нет доступа
+  - code: street_burning
+    title: Улица (пламя, дым)
+    selection_mode: single
+    parent_tag: street_flame_smoke
+    tags:
+      - code: burn_trash
+        title: Мусор
+      - code: burn_grass
+        title: Трава, пух
+      - code: burn_park
+        title: Парк
+      - code: burn_forest
+        title: Лес
+      - code: burn_peat
+        title: Торф
+      - code: burn_light_mast
+        title: Мачта освещения
+      - code: burn_contact_support
+        title: Опора контактной сети
+      - code: burn_powerline
+        title: ЛЭП
+      - code: burn_wires
+        title: Провода
+      - code: burn_trees
+        title: Дерево, деревья
+      - code: burn_person
+        title: Горит человек
+      - code: burn_unknown
+        title: Что горит неизвестно
+  - code: transport_burning
+    title: Транспорт (пламя, дым)
+    selection_mode: single
+    parent_tag: transport_flame_smoke
+    tags:
+      - code: tr_public
+        title: Общественный транспорт
+      - code: tr_car
+        title: Автомашина
+      - code: tr_accident_fire
+        title: ДТП с пожаром
+      - code: tr_dangerous_cargo
+        title: Опасный груз
+      - code: tr_air
+        title: Воздушный транспорт
+      - code: tr_airport
+        title: Аэропорт
+      - code: tr_rail
+        title: Ж/Д транспорт
+      - code: tr_rail_station
+        title: Вокзал ж/д, платформа ж/д
+      - code: tr_other
+        title: Транспорт прочее
+      - code: tr_water
+        title: Водный
+      - code: tr_bridge
+        title: Мост
+      - code: tr_overpass
+        title: Эстакада
+      - code: tr_tunnel
+        title: Тоннель
+      - code: tr_crossing
+        title: Переход подземный/наземный
+      - code: tr_metro
+        title: Метро
+      - code: tr_mcc_mcd
+        title: МЦК, МЦД
+      - code: tr_rail_tracks
+        title: Ж/Д пути
+      - code: tr_rail_cabinet
+        title: Релейный шкаф Ж/Д
+  - code: scene_place
+    title: Место происшествия
+    selection_mode: single
+    tags:
+      - code: place_tunnel
+        title: Тоннель
+      - code: place_pedestrian
+        title: Пешеходный переход
+  - code: threat_people
+    title: Угроза людям
+    selection_mode: single
+    tags:
+      - code: threat_people_yes
+        title: Да
+      - code: threat_people_no
+        title: Нет
+  - code: offense
+    title: Правонарушение
+    selection_mode: multi
+    tags:
+      - code: has_offense
+        title: Есть правонарушение
+  - code: medical_help
+    title: Медицинская помощь
+    selection_mode: single
+    tags:
+      - code: medical_help_yes
+        title: Да
+      - code: medical_help_no
+        title: Нет
+  - code: evacuation
+    title: Требуется эвакуация
+    selection_mode: single
+    tags:
+      - code: evacuation_yes
+        title: Да
+      - code: evacuation_no
+        title: Нет
+  - code: gasification
+    title: Проведена ли газификация
+    selection_mode: single
+    tags:
+      - code: gas_yes
+        title: Да
+      - code: gas_no
+        title: Нет
+      - code: gas_unknown
+        title: Нет данных

@@ -1,0 +1,22 @@
+code: accidents_transport
+title: Аварии и происшествия на транспортных объектах
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: transport_object
+    title: Объект
+    selection_mode: single
+    tags:
+      - code: metro
+        title: Метро
+      - code: rail
+        title: Железная дорога
+      - code: road
+        title: Автодорога
+      - code: air
+        title: Авиация
+      - code: water_tr
+        title: Водный транспорт

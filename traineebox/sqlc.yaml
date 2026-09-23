@@ -108,8 +108,7 @@ sql:
             go_type:
               type: "int16"
               pointer: true
-          - column: "attempt_answers.incident_type_id"
+          - column: "attempt_answers.incident_type_code"
             go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
+              type: "string"
               pointer: true

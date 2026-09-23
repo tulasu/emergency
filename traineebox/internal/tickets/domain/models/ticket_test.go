@@ -37,41 +37,37 @@ func TestTicketAvailabilityAndAttempts(t *testing.T) {
 }
 
 func TestAnswerTagsRequireType(t *testing.T) {
-	typeID := uuid.New()
-	groupID := uuid.New()
-	tagID := uuid.New()
+	typeCode := "fire"
 	groups := []models.IncidentTagGroup{{
-		ID: groupID, IncidentTypeID: typeID, Code: "g", Title: "G",
+		IncidentTypeCode: typeCode, Code: "g", Title: "G",
 		SelectionMode: models.TagSelectionMulti,
 		Tags: []models.IncidentTag{
-			{ID: tagID, IncidentTypeID: typeID, GroupID: groupID, Code: "t", Title: "T"},
+			{IncidentTypeCode: typeCode, GroupCode: "g", Code: "t", Title: "T"},
 		},
 	}}
-	ans := models.NewAnswer(nil, []uuid.UUID{tagID}, nil, "", "", "", "", "")
+	ans := models.NewAnswer(nil, []string{"t"}, nil, "", "", "", "", "")
 	if err := ans.ValidateTagSelection(groups); err != errs.ErrInvalidTags {
 		t.Fatalf("got %v", err)
 	}
-	ans = models.NewAnswer(&typeID, []uuid.UUID{tagID}, nil, "", "", "", "", "")
+	ans = models.NewAnswer(&typeCode, []string{"t"}, nil, "", "", "", "", "")
 	if err := ans.ValidateTagSelection(groups); err != nil {
 		t.Fatal(err)
 	}
-	foreign := uuid.New()
-	ans = models.NewAnswer(&typeID, []uuid.UUID{foreign}, nil, "", "", "", "", "")
+	ans = models.NewAnswer(&typeCode, []string{"foreign"}, nil, "", "", "", "", "")
 	if err := ans.ValidateTagSelection(groups); err != errs.ErrInvalidTags {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestAttemptExpireScoresDraft(t *testing.T) {
-	typeID := uuid.New()
+	typeCode := "fire"
 	ref := models.ReferenceAnswer{
-		TicketID:       uuid.New(),
-		IncidentTypeID: typeID,
+		TicketID:         uuid.New(),
+		IncidentTypeCode: typeCode,
 	}
 	deadline := time.Now().UTC().Add(-time.Second)
 	attempt := models.NewAttempt(ref.TicketID, uuid.New(), 1, time.Now().UTC().Add(-time.Minute), &deadline)
-	ansType := typeID
-	attempt.Answer = models.NewAnswer(&ansType, nil, nil, "", "", "", "", "")
+	attempt.Answer = models.NewAnswer(&typeCode, nil, nil, "", "", "", "", "")
 	now := time.Now().UTC()
 	if !attempt.IsExpired(now) {
 		t.Fatal("expected expired")

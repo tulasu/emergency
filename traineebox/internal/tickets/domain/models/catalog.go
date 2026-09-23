@@ -1,7 +1,5 @@
 package models
 
-import "github.com/google/uuid"
-
 type TagSelectionMode string
 
 const (
@@ -19,33 +17,29 @@ func ParseTagSelectionMode(s string) (TagSelectionMode, bool) {
 }
 
 type IncidentType struct {
-	ID    uuid.UUID
 	Code  string
 	Title string
 }
 
 type IncidentTagGroup struct {
-	ID             uuid.UUID
-	IncidentTypeID uuid.UUID
-	Code           string
-	Title          string
-	SelectionMode  TagSelectionMode
-	ParentTagID    *uuid.UUID
-	SortOrder      int
-	Tags           []IncidentTag
+	IncidentTypeCode string
+	Code             string
+	Title            string
+	SelectionMode    TagSelectionMode
+	ParentTagCode    string
+	SortOrder        int
+	Tags             []IncidentTag
 }
 
 type IncidentTag struct {
-	ID             uuid.UUID
-	IncidentTypeID uuid.UUID
-	GroupID        uuid.UUID
-	Code           string
-	Title          string
-	SortOrder      int
+	IncidentTypeCode string
+	GroupCode        string
+	Code             string
+	Title            string
+	SortOrder        int
 }
 
 type EmergencyService struct {
-	ID    uuid.UUID
 	Code  string
 	Title string
 }

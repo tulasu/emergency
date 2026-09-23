@@ -1,0 +1,18 @@
+code: threat_hazardous_release
+title: Угроза выброса опасных веществ и радиации
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: threat_haz_kind
+    title: Вид угрозы
+    selection_mode: single
+    tags:
+      - code: thaz_chem
+        title: Химия
+      - code: thaz_rad
+        title: Радиация
+      - code: thaz_unknown
+        title: Неизвестно

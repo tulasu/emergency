@@ -16,6 +16,7 @@ import (
 	"traineebox/internal/groups/domain/value_objects"
 	groupsinfra "traineebox/internal/groups/infrastructure"
 	groupspresentation "traineebox/internal/groups/presentation"
+	"traineebox/internal/platform/config"
 	ticketsapp "traineebox/internal/tickets/application"
 	ticketserrs "traineebox/internal/tickets/domain/errs"
 	ticketsvo "traineebox/internal/tickets/domain/value_objects"
@@ -122,7 +123,15 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		Authenticate: groupsSessionAuthenticator{auth: authenticate},
 	})
 
-	catalogRepo := ticketsinfra.NewCatalogRepository(pool)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	cat, err := ticketsinfra.LoadCatalog(cfg.CatalogPath)
+	if err != nil {
+		t.Fatalf("catalog: %v", err)
+	}
+	catalogRepo := ticketsinfra.NewCatalogRepository(cat)
 	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
 	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
 	membership := ticketsinfra.NewGroupMembership(pool)
@@ -130,6 +139,7 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
 		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
 		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
+		RecommendServices:  ticketsapp.RecommendServices{Catalog: catalogRepo},
 		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
 		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
 		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},

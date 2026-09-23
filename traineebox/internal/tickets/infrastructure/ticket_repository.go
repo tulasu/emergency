@@ -71,7 +71,7 @@ func (r *TicketRepository) SaveReference(ctx context.Context, ref models.Referen
 	q := r.q.WithTx(tx)
 	if err := q.UpsertReferenceAnswer(ctx, ticketssql.UpsertReferenceAnswerParams{
 		TicketID:           ref.TicketID,
-		IncidentTypeID:     ref.IncidentTypeID,
+		IncidentTypeCode:   ref.IncidentTypeCode,
 		ApplicantLastName:  ref.ApplicantLastName,
 		ApplicantFirstName: ref.ApplicantFirstName,
 		CallerNumber:       ref.CallerNumber,
@@ -85,16 +85,16 @@ func (r *TicketRepository) SaveReference(ctx context.Context, ref models.Referen
 	if err := q.DeleteReferenceAnswerServices(ctx, ref.TicketID); err != nil {
 		return err
 	}
-	for _, tagID := range ref.TagIDs {
+	for _, tagCode := range ref.TagCodes {
 		if err := q.InsertReferenceAnswerTag(ctx, ticketssql.InsertReferenceAnswerTagParams{
-			TicketID: ref.TicketID, TagID: tagID,
+			TicketID: ref.TicketID, TagCode: tagCode,
 		}); err != nil {
 			return err
 		}
 	}
-	for _, serviceID := range ref.ServiceIDs {
+	for _, serviceCode := range ref.ServiceCodes {
 		if err := q.InsertReferenceAnswerService(ctx, ticketssql.InsertReferenceAnswerServiceParams{
-			TicketID: ref.TicketID, ServiceID: serviceID,
+			TicketID: ref.TicketID, ServiceCode: serviceCode,
 		}); err != nil {
 			return err
 		}
@@ -120,9 +120,9 @@ func (r *TicketRepository) FindReference(ctx context.Context, ticketID uuid.UUID
 	}
 	return models.ReferenceAnswer{
 		TicketID:           row.TicketID,
-		IncidentTypeID:     row.IncidentTypeID,
-		TagIDs:             tags,
-		ServiceIDs:         services,
+		IncidentTypeCode:   row.IncidentTypeCode,
+		TagCodes:           tags,
+		ServiceCodes:       services,
 		ApplicantLastName:  row.ApplicantLastName,
 		ApplicantFirstName: row.ApplicantFirstName,
 		CallerNumber:       row.CallerNumber,

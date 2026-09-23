@@ -8,9 +8,9 @@ import (
 
 type ReferenceAnswer struct {
 	TicketID           uuid.UUID
-	IncidentTypeID     uuid.UUID
-	TagIDs             []uuid.UUID
-	ServiceIDs         []uuid.UUID
+	IncidentTypeCode   string
+	TagCodes           []string
+	ServiceCodes       []string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -18,24 +18,25 @@ type ReferenceAnswer struct {
 }
 
 func NewReferenceAnswer(
-	ticketID, incidentTypeID uuid.UUID,
-	tagIDs, serviceIDs []uuid.UUID,
+	ticketID uuid.UUID,
+	incidentTypeCode string,
+	tagCodes, serviceCodes []string,
 	lastName, firstName, caller, dictated string,
 ) (ReferenceAnswer, error) {
-	if incidentTypeID == uuid.Nil {
+	if incidentTypeCode == "" {
 		return ReferenceAnswer{}, errs.ErrInvalidInput
 	}
-	if tagIDs == nil {
-		tagIDs = []uuid.UUID{}
+	if tagCodes == nil {
+		tagCodes = []string{}
 	}
-	if serviceIDs == nil {
-		serviceIDs = []uuid.UUID{}
+	if serviceCodes == nil {
+		serviceCodes = []string{}
 	}
 	return ReferenceAnswer{
 		TicketID:           ticketID,
-		IncidentTypeID:     incidentTypeID,
-		TagIDs:             append([]uuid.UUID(nil), tagIDs...),
-		ServiceIDs:         append([]uuid.UUID(nil), serviceIDs...),
+		IncidentTypeCode:   incidentTypeCode,
+		TagCodes:           append([]string(nil), tagCodes...),
+		ServiceCodes:       append([]string(nil), serviceCodes...),
 		ApplicantLastName:  lastName,
 		ApplicantFirstName: firstName,
 		CallerNumber:       caller,

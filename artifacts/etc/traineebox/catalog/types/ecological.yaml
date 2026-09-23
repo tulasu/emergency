@@ -1,0 +1,20 @@
+code: ecological
+title: Экологическое происшествие
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: eco_kind
+    title: Вид
+    selection_mode: single
+    tags:
+      - code: eco_spill
+        title: Разлив
+      - code: eco_air
+        title: Загрязнение воздуха
+      - code: eco_waste
+        title: Отходы
+      - code: eco_other
+        title: Прочее

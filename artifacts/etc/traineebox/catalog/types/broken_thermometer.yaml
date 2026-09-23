@@ -1,0 +1,21 @@
+code: broken_thermometer
+title: Разбитый градусник
+groups:
+  - code: mercury_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: merc_home
+        title: Квартира / дом
+      - code: merc_public
+        title: Общественное место
+      - code: merc_other
+        title: Прочее
+  - code: threat_people
+    title: Угроза людям
+    selection_mode: single
+    tags:
+      - code: threat_people_yes
+        title: Да
+      - code: threat_people_no
+        title: Нет

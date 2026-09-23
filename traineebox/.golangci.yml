@@ -123,7 +123,7 @@ linters:
             - github.com/jackc/pgx
             - github.com/jackc/pgx/v5
             - github.com/jackc/puddle
-        tickets_presentation:
+            - gopkg.in/yaml.v3        tickets_presentation:
           files:
             - "**/internal/tickets/presentation/**/*.go"
           allow:

@@ -1,0 +1,51 @@
+groups:
+  access:
+    code: access
+    title: Доступ
+    selection_mode: multi
+    tags:
+      - code: no_access
+        title: Нет доступа
+  evacuation:
+    code: evacuation
+    title: Требуется эвакуация
+    selection_mode: single
+    tags:
+      - code: evacuation_yes
+        title: Да
+      - code: evacuation_no
+        title: Нет
+  medical_help:
+    code: medical_help
+    title: Медицинская помощь
+    selection_mode: single
+    tags:
+      - code: medical_help_yes
+        title: Да
+      - code: medical_help_no
+        title: Нет
+  offense:
+    code: offense
+    title: Правонарушение
+    selection_mode: multi
+    tags:
+      - code: has_offense
+        title: Есть правонарушение
+  threat_people:
+    code: threat_people
+    title: Угроза людям
+    selection_mode: single
+    tags:
+      - code: threat_people_yes
+        title: Да
+      - code: threat_people_no
+        title: Нет
+  victims:
+    code: victims
+    title: Пострадавшие
+    selection_mode: single
+    tags:
+      - code: victims_yes
+        title: Да
+      - code: victims_no
+        title: Нет

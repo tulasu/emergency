@@ -1,34 +1,3 @@
-CREATE TABLE incident_types (
-    id UUID PRIMARY KEY,
-    code TEXT NOT NULL,
-    title TEXT NOT NULL
-);
-
-CREATE TABLE incident_tag_groups (
-    id UUID PRIMARY KEY,
-    incident_type_id UUID NOT NULL,
-    code TEXT NOT NULL,
-    title TEXT NOT NULL,
-    selection_mode TEXT NOT NULL,
-    parent_tag_id UUID NULL,
-    sort_order INT NOT NULL
-);
-
-CREATE TABLE incident_tags (
-    id UUID PRIMARY KEY,
-    incident_type_id UUID NOT NULL,
-    group_id UUID NOT NULL,
-    code TEXT NOT NULL,
-    title TEXT NOT NULL,
-    sort_order INT NOT NULL
-);
-
-CREATE TABLE emergency_services (
-    id UUID PRIMARY KEY,
-    code TEXT NOT NULL,
-    title TEXT NOT NULL
-);
-
 CREATE TABLE tickets (
     id UUID PRIMARY KEY,
     group_id UUID NOT NULL,
@@ -44,7 +13,7 @@ CREATE TABLE tickets (
 
 CREATE TABLE ticket_reference_answers (
     ticket_id UUID PRIMARY KEY,
-    incident_type_id UUID NOT NULL,
+    incident_type_code TEXT NOT NULL,
     applicant_last_name TEXT NOT NULL,
     applicant_first_name TEXT NOT NULL,
     caller_number TEXT NOT NULL,
@@ -53,14 +22,14 @@ CREATE TABLE ticket_reference_answers (
 
 CREATE TABLE reference_answer_tags (
     ticket_id UUID NOT NULL,
-    tag_id UUID NOT NULL,
-    PRIMARY KEY (ticket_id, tag_id)
+    tag_code TEXT NOT NULL,
+    PRIMARY KEY (ticket_id, tag_code)
 );
 
 CREATE TABLE reference_answer_services (
     ticket_id UUID NOT NULL,
-    service_id UUID NOT NULL,
-    PRIMARY KEY (ticket_id, service_id)
+    service_code TEXT NOT NULL,
+    PRIMARY KEY (ticket_id, service_code)
 );
 
 CREATE TABLE ticket_attempts (
@@ -77,7 +46,7 @@ CREATE TABLE ticket_attempts (
 
 CREATE TABLE attempt_answers (
     attempt_id UUID PRIMARY KEY,
-    incident_type_id UUID NULL,
+    incident_type_code TEXT NULL,
     applicant_last_name TEXT NOT NULL,
     applicant_first_name TEXT NOT NULL,
     caller_number TEXT NOT NULL,
@@ -88,14 +57,14 @@ CREATE TABLE attempt_answers (
 
 CREATE TABLE attempt_answer_tags (
     attempt_id UUID NOT NULL,
-    tag_id UUID NOT NULL,
-    PRIMARY KEY (attempt_id, tag_id)
+    tag_code TEXT NOT NULL,
+    PRIMARY KEY (attempt_id, tag_code)
 );
 
 CREATE TABLE attempt_answer_services (
     attempt_id UUID NOT NULL,
-    service_id UUID NOT NULL,
-    PRIMARY KEY (attempt_id, service_id)
+    service_code TEXT NOT NULL,
+    PRIMARY KEY (attempt_id, service_code)
 );
 
 CREATE TABLE group_members (

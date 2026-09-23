@@ -70,9 +70,9 @@ type SaveAttemptAnswerInput struct {
 	ActorID            uuid.UUID
 	Admin              bool
 	AttemptID          uuid.UUID
-	IncidentTypeID     *uuid.UUID
-	TagIDs             []uuid.UUID
-	ServiceIDs         []uuid.UUID
+	IncidentTypeCode   *string
+	TagCodes           []string
+	ServiceCodes       []string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -95,7 +95,7 @@ func (uc SaveAttemptAnswer) Execute(ctx context.Context, in SaveAttemptAnswerInp
 		return models.Attempt{}, err
 	}
 	answer := models.NewAnswer(
-		in.IncidentTypeID, in.TagIDs, in.ServiceIDs,
+		in.IncidentTypeCode, in.TagCodes, in.ServiceCodes,
 		in.ApplicantLastName, in.ApplicantFirstName, in.CallerNumber, in.DictatedNumber, notes,
 	)
 	if err := validateAnswer(ctx, uc.Catalog, answer); err != nil {
@@ -236,22 +236,22 @@ func expireAttempt(
 }
 
 func validateAnswer(ctx context.Context, catalog repositories.CatalogRepository, answer models.Answer) error {
-	if answer.IncidentTypeID != nil {
-		if _, err := catalog.FindIncidentTypeByID(ctx, *answer.IncidentTypeID); err != nil {
+	if answer.IncidentTypeCode != nil {
+		if _, err := catalog.FindIncidentTypeByCode(ctx, *answer.IncidentTypeCode); err != nil {
 			return err
 		}
-		groups, err := catalog.ListTagGroupsByType(ctx, *answer.IncidentTypeID)
+		groups, err := catalog.ListTagGroupsByType(ctx, *answer.IncidentTypeCode)
 		if err != nil {
 			return err
 		}
 		if err := answer.ValidateTagSelection(groups); err != nil {
 			return err
 		}
-	} else if len(answer.TagIDs) > 0 {
+	} else if len(answer.TagCodes) > 0 {
 		return errs.ErrInvalidTags
 	}
-	if len(answer.ServiceIDs) > 0 {
-		ok, err := catalog.ServiceExists(ctx, answer.ServiceIDs)
+	if len(answer.ServiceCodes) > 0 {
+		ok, err := catalog.ServiceExists(ctx, answer.ServiceCodes)
 		if err != nil {
 			return err
 		}

@@ -112,9 +112,9 @@ type SetReferenceAnswerInput struct {
 	ActorID            uuid.UUID
 	Admin              bool
 	TicketID           uuid.UUID
-	IncidentTypeID     uuid.UUID
-	TagIDs             []uuid.UUID
-	ServiceIDs         []uuid.UUID
+	IncidentTypeCode   string
+	TagCodes           []string
+	ServiceCodes       []string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -139,15 +139,15 @@ func (uc SetReferenceAnswer) Execute(ctx context.Context, in SetReferenceAnswerI
 			return models.ReferenceAnswer{}, err
 		}
 	}
-	if _, err := uc.Catalog.FindIncidentTypeByID(ctx, in.IncidentTypeID); err != nil {
+	if _, err := uc.Catalog.FindIncidentTypeByCode(ctx, in.IncidentTypeCode); err != nil {
 		return models.ReferenceAnswer{}, err
 	}
-	groups, err := uc.Catalog.ListTagGroupsByType(ctx, in.IncidentTypeID)
+	groups, err := uc.Catalog.ListTagGroupsByType(ctx, in.IncidentTypeCode)
 	if err != nil {
 		return models.ReferenceAnswer{}, err
 	}
 	ref, err := models.NewReferenceAnswer(
-		in.TicketID, in.IncidentTypeID, in.TagIDs, in.ServiceIDs,
+		in.TicketID, in.IncidentTypeCode, in.TagCodes, in.ServiceCodes,
 		in.ApplicantLastName, in.ApplicantFirstName, in.CallerNumber, in.DictatedNumber,
 	)
 	if err != nil {
@@ -156,8 +156,8 @@ func (uc SetReferenceAnswer) Execute(ctx context.Context, in SetReferenceAnswerI
 	if err := ref.ValidateTagSelection(groups); err != nil {
 		return models.ReferenceAnswer{}, err
 	}
-	if len(in.ServiceIDs) > 0 {
-		ok, err := uc.Catalog.ServiceExists(ctx, in.ServiceIDs)
+	if len(in.ServiceCodes) > 0 {
+		ok, err := uc.Catalog.ServiceExists(ctx, in.ServiceCodes)
 		if err != nil {
 			return models.ReferenceAnswer{}, err
 		}

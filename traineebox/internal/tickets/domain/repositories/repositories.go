@@ -11,14 +11,11 @@ import (
 
 type CatalogRepository interface {
 	ListIncidentTypes(ctx context.Context) ([]models.IncidentType, error)
-	ListTagGroupsByType(ctx context.Context, typeID uuid.UUID) ([]models.IncidentTagGroup, error)
+	ListTagGroupsByType(ctx context.Context, typeCode string) ([]models.IncidentTagGroup, error)
 	ListServices(ctx context.Context) ([]models.EmergencyService, error)
-	UpsertIncidentType(ctx context.Context, code, title string) (models.IncidentType, error)
-	UpsertTagGroup(ctx context.Context, typeID uuid.UUID, code, title string, mode models.TagSelectionMode, parentTagID *uuid.UUID, sortOrder int) (models.IncidentTagGroup, error)
-	UpsertIncidentTag(ctx context.Context, typeID, groupID uuid.UUID, code, title string, sortOrder int) (models.IncidentTag, error)
-	UpsertService(ctx context.Context, code, title string) (models.EmergencyService, error)
-	FindIncidentTypeByID(ctx context.Context, id uuid.UUID) (models.IncidentType, error)
-	ServiceExists(ctx context.Context, ids []uuid.UUID) (bool, error)
+	FindIncidentTypeByCode(ctx context.Context, code string) (models.IncidentType, error)
+	ServiceExists(ctx context.Context, codes []string) (bool, error)
+	RecommendServices(ctx context.Context, typeCode string, tagCodes []string) ([]string, error)
 }
 
 type TicketRepository interface {

@@ -1,0 +1,17 @@
+code: fatal_outcome
+title: Смертельный исход
+groups:
+  - code: medical_help
+    title: Медицинская помощь
+    selection_mode: single
+    tags:
+      - code: medical_help_yes
+        title: Да
+      - code: medical_help_no
+        title: Нет
+  - code: offense
+    title: Правонарушение
+    selection_mode: multi
+    tags:
+      - code: has_offense
+        title: Есть правонарушение

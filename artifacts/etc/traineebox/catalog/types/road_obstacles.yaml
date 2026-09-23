@@ -1,0 +1,15 @@
+code: road_obstacles
+title: Дорожные помехи
+groups:
+  - code: obstacle_kind
+    title: Вид помехи
+    selection_mode: single
+    tags:
+      - code: obstacle_object
+        title: Посторонний предмет
+      - code: obstacle_damage
+        title: Повреждение покрытия
+      - code: obstacle_flood
+        title: Подтопление
+      - code: obstacle_other
+        title: Прочее

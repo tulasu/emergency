@@ -1,0 +1,18 @@
+code: collapse
+title: Обрушение
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: collapse_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: col_building
+        title: Здание
+      - code: col_structure
+        title: Конструкция
+      - code: col_other
+        title: Прочее

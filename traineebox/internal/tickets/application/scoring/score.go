@@ -1,10 +1,6 @@
 package scoring
 
-import (
-	"traineebox/internal/tickets/domain/models"
-
-	"github.com/google/uuid"
-)
+import "traineebox/internal/tickets/domain/models"
 
 // Score compares answer to reference. Notes are ignored.
 // Each present reference component contributes equal weight; result is clamped to [1, 100].
@@ -14,9 +10,9 @@ func Score(ref models.ReferenceAnswer, answer models.Answer) (int, error) {
 	}
 	var parts []component
 
-	parts = append(parts, component{ok: answer.IncidentTypeID != nil && *answer.IncidentTypeID == ref.IncidentTypeID})
-	parts = append(parts, component{ok: setEqual(ref.TagIDs, answer.TagIDs)})
-	parts = append(parts, component{ok: setEqual(ref.ServiceIDs, answer.ServiceIDs)})
+	parts = append(parts, component{ok: answer.IncidentTypeCode != nil && *answer.IncidentTypeCode == ref.IncidentTypeCode})
+	parts = append(parts, component{ok: setEqual(ref.TagCodes, answer.TagCodes)})
+	parts = append(parts, component{ok: setEqual(ref.ServiceCodes, answer.ServiceCodes)})
 
 	if ref.ApplicantLastName != "" {
 		parts = append(parts, component{ok: answer.ApplicantLastName == ref.ApplicantLastName})
@@ -50,11 +46,11 @@ func Score(ref models.ReferenceAnswer, answer models.Answer) (int, error) {
 	return score, nil
 }
 
-func setEqual(a, b []uuid.UUID) bool {
+func setEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	set := make(map[uuid.UUID]struct{}, len(a))
+	set := make(map[string]struct{}, len(a))
 	for _, id := range a {
 		set[id] = struct{}{}
 	}

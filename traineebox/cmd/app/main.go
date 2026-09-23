@@ -70,7 +70,11 @@ func main() {
 		Authenticate: groupsSessionAuthenticator{auth: authenticate},
 	})
 
-	catalogRepo := ticketsinfra.NewCatalogRepository(pool)
+	cat, err := ticketsinfra.LoadCatalog(cfg.CatalogPath)
+	if err != nil {
+		log.Fatalf("catalog: %v", err)
+	}
+	catalogRepo := ticketsinfra.NewCatalogRepository(cat)
 	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
 	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
 	membership := ticketsinfra.NewGroupMembership(pool)
@@ -78,6 +82,7 @@ func main() {
 		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
 		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
 		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
+		RecommendServices:  ticketsapp.RecommendServices{Catalog: catalogRepo},
 		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
 		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
 		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},

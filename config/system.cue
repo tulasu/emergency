@@ -15,6 +15,7 @@ import "strings"
 config: #Config
 
 _caddyfile: "\(strings.TrimSuffix(config.root, "/"))/etc/caddy/Caddyfile"
+_catalog:   "\(strings.TrimSuffix(config.root, "/"))/etc/traineebox/catalog"
 
 compose: {
 	services: {

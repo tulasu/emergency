@@ -1,0 +1,21 @@
+code: explosion
+title: Взрыв
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+  - offense
+groups:
+  - code: explosion_place
+    title: Где
+    selection_mode: single
+    tags:
+      - code: exp_street
+        title: Улица
+      - code: exp_building
+        title: Здание
+      - code: exp_transport
+        title: Транспорт
+      - code: exp_other
+        title: Прочее

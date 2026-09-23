@@ -1,0 +1,31 @@
+code: animals
+title: Животные
+groups:
+  - code: animal_kind
+    title: Животное
+    selection_mode: single
+    tags:
+      - code: dog
+        title: Собака
+      - code: cat
+        title: Кошка
+      - code: wild
+        title: Дикое животное
+      - code: other_animal
+        title: Прочее
+  - code: animal_aggression
+    title: Агрессия
+    selection_mode: single
+    tags:
+      - code: animal_aggression_yes
+        title: Да
+      - code: animal_aggression_no
+        title: Нет
+  - code: threat_people
+    title: Угроза людям
+    selection_mode: single
+    tags:
+      - code: threat_people_yes
+        title: Да
+      - code: threat_people_no
+        title: Нет

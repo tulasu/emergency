@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -52,7 +53,7 @@ func (r *AttemptRepository) Create(ctx context.Context, attempt models.Attempt) 
 	now := time.Now().UTC()
 	if err := q.CreateAttemptAnswer(ctx, ticketssql.CreateAttemptAnswerParams{
 		AttemptID:          attempt.ID,
-		IncidentTypeID:     attempt.Answer.IncidentTypeID,
+		IncidentTypeCode:   textPtr(attempt.Answer.IncidentTypeCode),
 		ApplicantLastName:  attempt.Answer.ApplicantLastName,
 		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
 		CallerNumber:       attempt.Answer.CallerNumber,
@@ -143,7 +144,7 @@ func (r *AttemptRepository) Save(ctx context.Context, attempt models.Attempt) er
 	now := time.Now().UTC()
 	if err := q.UpdateAttemptAnswer(ctx, ticketssql.UpdateAttemptAnswerParams{
 		AttemptID:          attempt.ID,
-		IncidentTypeID:     attempt.Answer.IncidentTypeID,
+		IncidentTypeCode:   textPtr(attempt.Answer.IncidentTypeCode),
 		ApplicantLastName:  attempt.Answer.ApplicantLastName,
 		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
 		CallerNumber:       attempt.Answer.CallerNumber,
@@ -159,16 +160,16 @@ func (r *AttemptRepository) Save(ctx context.Context, attempt models.Attempt) er
 	if err := q.DeleteAttemptAnswerServices(ctx, attempt.ID); err != nil {
 		return err
 	}
-	for _, tagID := range attempt.Answer.TagIDs {
+	for _, tagCode := range attempt.Answer.TagCodes {
 		if err := q.InsertAttemptAnswerTag(ctx, ticketssql.InsertAttemptAnswerTagParams{
-			AttemptID: attempt.ID, TagID: tagID,
+			AttemptID: attempt.ID, TagCode: tagCode,
 		}); err != nil {
 			return err
 		}
 	}
-	for _, serviceID := range attempt.Answer.ServiceIDs {
+	for _, serviceCode := range attempt.Answer.ServiceCodes {
 		if err := q.InsertAttemptAnswerService(ctx, ticketssql.InsertAttemptAnswerServiceParams{
-			AttemptID: attempt.ID, ServiceID: serviceID,
+			AttemptID: attempt.ID, ServiceCode: serviceCode,
 		}); err != nil {
 			return err
 		}
@@ -211,11 +212,26 @@ func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.Tick
 		FinishedAt: row.FinishedAt,
 		Score:      int16PtrToInt(row.Score),
 		Answer: models.NewAnswer(
-			ans.IncidentTypeID, tags, services,
+			textToPtr(ans.IncidentTypeCode), tags, services,
 			ans.ApplicantLastName, ans.ApplicantFirstName,
 			ans.CallerNumber, ans.DictatedNumber, notes,
 		),
 	}, nil
+}
+
+func textPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+func textToPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	s := t.String
+	return &s
 }
 
 func intPtrToInt16(v *int) *int16 {

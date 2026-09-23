@@ -2,14 +2,12 @@ package models
 
 import (
 	"traineebox/internal/tickets/domain/value_objects"
-
-	"github.com/google/uuid"
 )
 
 type Answer struct {
-	IncidentTypeID     *uuid.UUID
-	TagIDs             []uuid.UUID
-	ServiceIDs         []uuid.UUID
+	IncidentTypeCode   *string
+	TagCodes           []string
+	ServiceCodes       []string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -18,21 +16,21 @@ type Answer struct {
 }
 
 func NewAnswer(
-	incidentTypeID *uuid.UUID,
-	tagIDs, serviceIDs []uuid.UUID,
+	incidentTypeCode *string,
+	tagCodes, serviceCodes []string,
 	lastName, firstName, caller, dictated string,
 	notes value_objects.Notes,
 ) Answer {
-	if tagIDs == nil {
-		tagIDs = []uuid.UUID{}
+	if tagCodes == nil {
+		tagCodes = []string{}
 	}
-	if serviceIDs == nil {
-		serviceIDs = []uuid.UUID{}
+	if serviceCodes == nil {
+		serviceCodes = []string{}
 	}
 	return Answer{
-		IncidentTypeID:     incidentTypeID,
-		TagIDs:             append([]uuid.UUID(nil), tagIDs...),
-		ServiceIDs:         append([]uuid.UUID(nil), serviceIDs...),
+		IncidentTypeCode:   incidentTypeCode,
+		TagCodes:           append([]string(nil), tagCodes...),
+		ServiceCodes:       append([]string(nil), serviceCodes...),
 		ApplicantLastName:  lastName,
 		ApplicantFirstName: firstName,
 		CallerNumber:       caller,

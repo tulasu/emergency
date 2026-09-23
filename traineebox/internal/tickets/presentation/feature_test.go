@@ -11,33 +11,12 @@ import (
 
 	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
-	"traineebox/internal/tickets/domain/models"
-	ticketsinfra "traineebox/internal/tickets/infrastructure"
 )
 
 func TestTicketsAttemptFlow(t *testing.T) {
 	pool := testkit.StartPostgres(t)
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
-
-	catalog := ticketsinfra.NewCatalogRepository(pool)
-	ctx := t.Context()
-	fire, err := catalog.UpsertIncidentType(ctx, "fire", "Пожар")
-	if err != nil {
-		t.Fatal(err)
-	}
-	grp, err := catalog.UpsertTagGroup(ctx, fire.ID, "where", "Где", models.TagSelectionSingle, nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tag, err := catalog.UpsertIncidentTag(ctx, fire.ID, grp.ID, "building", "Здание", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc, err := catalog.UpsertService(ctx, "fire_service", "Пожарная")
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	_ = testkit.SeedUser(t, pool, "owner1", "password1", value_objects.RoleTeacher)
 	_ = testkit.SeedUser(t, pool, "stud1", "password1", value_objects.RoleStudent)
@@ -74,9 +53,9 @@ func TestTicketsAttemptFlow(t *testing.T) {
 	mustDecode(t, createTicket.Body, &ticket)
 
 	ref := doRequest(t, handler, http.MethodPut, "/tickets/"+ticket.ID+"/reference", ownerToken, map[string]any{
-		"incident_type_id":     fire.ID.String(),
-		"tag_ids":              []string{tag.ID.String()},
-		"service_ids":          []string{svc.ID.String()},
+		"incident_type_code":   "101",
+		"tag_codes":            []string{"where_street", "street_flame_smoke", "burn_trash"},
+		"service_codes":        []string{"sluzhba_101"},
 		"applicant_last_name":  "Ivanov",
 		"applicant_first_name": "Ivan",
 		"caller_number":        "79001112233",
@@ -105,9 +84,9 @@ func TestTicketsAttemptFlow(t *testing.T) {
 	}
 
 	save := doRequest(t, handler, http.MethodPatch, "/attempts/"+attempt.ID+"/answer", studentToken, map[string]any{
-		"incident_type_id":     fire.ID.String(),
-		"tag_ids":              []string{tag.ID.String()},
-		"service_ids":          []string{svc.ID.String()},
+		"incident_type_code":   "101",
+		"tag_codes":            []string{"where_street", "street_flame_smoke", "burn_trash"},
+		"service_codes":        []string{"sluzhba_101"},
 		"applicant_last_name":  "Ivanov",
 		"applicant_first_name": "Ivan",
 		"caller_number":        "79001112233",
@@ -151,13 +130,6 @@ func TestTicketsAutoExpire(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	catalog := ticketsinfra.NewCatalogRepository(pool)
-	ctx := t.Context()
-	fire, err := catalog.UpsertIncidentType(ctx, "fire", "Пожар")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	_ = testkit.SeedUser(t, pool, "owner2", "password1", value_objects.RoleTeacher)
 	_ = testkit.SeedUser(t, pool, "stud2", "password1", value_objects.RoleStudent)
 	ownerToken := loginToken(t, handler, "owner2", "password1")
@@ -184,9 +156,9 @@ func TestTicketsAutoExpire(t *testing.T) {
 	mustDecode(t, createTicket.Body, &ticket)
 
 	mustOK(t, doRequest(t, handler, http.MethodPut, "/tickets/"+ticket.ID+"/reference", ownerToken, map[string]any{
-		"incident_type_id": fire.ID.String(),
-		"tag_ids":          []string{},
-		"service_ids":      []string{},
+		"incident_type_code": "gratitude",
+		"tag_codes":          []string{},
+		"service_codes":      []string{},
 	}))
 
 	start := doRequest(t, handler, http.MethodPost, "/tickets/"+ticket.ID+"/attempts", studentToken, nil)

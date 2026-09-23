@@ -8,6 +8,7 @@ type API struct {
 	listIncidentTypes  application.ListIncidentTypes
 	listTagsByType     application.ListTagsByType
 	listServices       application.ListServices
+	recommendServices  application.RecommendServices
 	createTicket       application.CreateTicket
 	listTicketsByGroup application.ListTicketsByGroup
 	getTicket          application.GetTicket
@@ -24,6 +25,7 @@ type Deps struct {
 	ListIncidentTypes  application.ListIncidentTypes
 	ListTagsByType     application.ListTagsByType
 	ListServices       application.ListServices
+	RecommendServices  application.RecommendServices
 	CreateTicket       application.CreateTicket
 	ListTicketsByGroup application.ListTicketsByGroup
 	GetTicket          application.GetTicket
@@ -41,6 +43,7 @@ func NewAPI(deps Deps) *API {
 		listIncidentTypes:  deps.ListIncidentTypes,
 		listTagsByType:     deps.ListTagsByType,
 		listServices:       deps.ListServices,
+		recommendServices:  deps.RecommendServices,
 		createTicket:       deps.CreateTicket,
 		listTicketsByGroup: deps.ListTicketsByGroup,
 		getTicket:          deps.GetTicket,

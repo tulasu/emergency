@@ -1,0 +1,22 @@
+code: accidents_city
+title: Аварии и происшествия в городском хозяйстве
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: utility_kind
+    title: Вид аварии
+    selection_mode: single
+    tags:
+      - code: heat
+        title: Теплоснабжение
+      - code: water
+        title: Водоснабжение
+      - code: power
+        title: Электроснабжение
+      - code: sewage
+        title: Канализация
+      - code: other_utility
+        title: Прочее

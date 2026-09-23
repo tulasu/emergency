@@ -1,0 +1,20 @@
+code: natural_disaster
+title: Природная стихия
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+groups:
+  - code: nature_kind
+    title: Вид
+    selection_mode: single
+    tags:
+      - code: storm
+        title: Шторм / ветер
+      - code: flood
+        title: Паводок / наводнение
+      - code: ice
+        title: Гололед / снег
+      - code: other_nature
+        title: Прочее

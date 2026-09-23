@@ -1,0 +1,7 @@
+code: other
+title: Прочие происшествия
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation

@@ -1,0 +1,21 @@
+code: accidents_hazardous
+title: Аварии на опасных и производственных объектах
+include_common:
+  - access
+  - threat_people
+  - medical_help
+  - evacuation
+  - offense
+groups:
+  - code: hazard_kind
+    title: Вид
+    selection_mode: single
+    tags:
+      - code: chem
+        title: Химия
+      - code: explosion_risk
+        title: Взрывоопасно
+      - code: fire_risk
+        title: Пожар / задымление
+      - code: other_hazard
+        title: Прочее

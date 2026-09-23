@@ -4,38 +4,29 @@ import (
 	"time"
 
 	"traineebox/internal/tickets/domain/models"
-
-	"github.com/google/uuid"
 )
 
 type incidentTypeDTO struct {
-	ID    string `json:"id"`
 	Code  string `json:"code"`
 	Title string `json:"title"`
 }
 
 type incidentTagDTO struct {
-	ID             string `json:"id"`
-	IncidentTypeID string `json:"incident_type_id"`
-	GroupID        string `json:"group_id"`
-	Code           string `json:"code"`
-	Title          string `json:"title"`
-	SortOrder      int    `json:"sort_order"`
+	Code      string `json:"code"`
+	Title     string `json:"title"`
+	SortOrder int    `json:"sort_order"`
 }
 
 type tagGroupDTO struct {
-	ID             string           `json:"id"`
-	IncidentTypeID string           `json:"incident_type_id"`
-	Code           string           `json:"code"`
-	Title          string           `json:"title"`
-	SelectionMode  string           `json:"selection_mode"`
-	ParentTagID    *string          `json:"parent_tag_id,omitempty"`
-	SortOrder      int              `json:"sort_order"`
-	Tags           []incidentTagDTO `json:"tags"`
+	Code          string           `json:"code"`
+	Title         string           `json:"title"`
+	SelectionMode string           `json:"selection_mode"`
+	ParentTagCode string           `json:"parent_tag_code,omitempty"`
+	SortOrder     int              `json:"sort_order"`
+	Tags          []incidentTagDTO `json:"tags"`
 }
 
 type serviceDTO struct {
-	ID    string `json:"id"`
 	Code  string `json:"code"`
 	Title string `json:"title"`
 }
@@ -54,9 +45,9 @@ type ticketDTO struct {
 }
 
 type answerDTO struct {
-	IncidentTypeID     *string  `json:"incident_type_id,omitempty"`
-	TagIDs             []string `json:"tag_ids"`
-	ServiceIDs         []string `json:"service_ids"`
+	IncidentTypeCode   *string  `json:"incident_type_code,omitempty"`
+	TagCodes           []string `json:"tag_codes"`
+	ServiceCodes       []string `json:"service_codes"`
 	ApplicantLastName  string   `json:"applicant_last_name"`
 	ApplicantFirstName string   `json:"applicant_first_name"`
 	CallerNumber       string   `json:"caller_number"`
@@ -79,17 +70,13 @@ type attemptDTO struct {
 
 type referenceAnswerDTO struct {
 	TicketID           string   `json:"ticket_id"`
-	IncidentTypeID     string   `json:"incident_type_id"`
-	TagIDs             []string `json:"tag_ids"`
-	ServiceIDs         []string `json:"service_ids"`
+	IncidentTypeCode   string   `json:"incident_type_code"`
+	TagCodes           []string `json:"tag_codes"`
+	ServiceCodes       []string `json:"service_codes"`
 	ApplicantLastName  string   `json:"applicant_last_name"`
 	ApplicantFirstName string   `json:"applicant_first_name"`
 	CallerNumber       string   `json:"caller_number"`
 	DictatedNumber     string   `json:"dictated_number"`
-}
-
-type emptyOutput struct {
-	Body struct{}
 }
 
 func toTicketDTO(t models.Ticket) ticketDTO {
@@ -123,15 +110,10 @@ func toAttemptDTO(a models.Attempt) attemptDTO {
 }
 
 func toAnswerDTO(a models.Answer) answerDTO {
-	var typeID *string
-	if a.IncidentTypeID != nil {
-		s := a.IncidentTypeID.String()
-		typeID = &s
-	}
 	return answerDTO{
-		IncidentTypeID:     typeID,
-		TagIDs:             uuidsToStrings(a.TagIDs),
-		ServiceIDs:         uuidsToStrings(a.ServiceIDs),
+		IncidentTypeCode:   a.IncidentTypeCode,
+		TagCodes:           append([]string(nil), a.TagCodes...),
+		ServiceCodes:       append([]string(nil), a.ServiceCodes...),
 		ApplicantLastName:  a.ApplicantLastName,
 		ApplicantFirstName: a.ApplicantFirstName,
 		CallerNumber:       a.CallerNumber,
@@ -143,9 +125,9 @@ func toAnswerDTO(a models.Answer) answerDTO {
 func toReferenceDTO(r models.ReferenceAnswer) referenceAnswerDTO {
 	return referenceAnswerDTO{
 		TicketID:           r.TicketID.String(),
-		IncidentTypeID:     r.IncidentTypeID.String(),
-		TagIDs:             uuidsToStrings(r.TagIDs),
-		ServiceIDs:         uuidsToStrings(r.ServiceIDs),
+		IncidentTypeCode:   r.IncidentTypeCode,
+		TagCodes:           append([]string(nil), r.TagCodes...),
+		ServiceCodes:       append([]string(nil), r.ServiceCodes...),
 		ApplicantLastName:  r.ApplicantLastName,
 		ApplicantFirstName: r.ApplicantFirstName,
 		CallerNumber:       r.CallerNumber,
@@ -159,37 +141,6 @@ func formatTimePtr(t *time.Time) *string {
 	}
 	s := t.UTC().Format(time.RFC3339Nano)
 	return &s
-}
-
-func uuidsToStrings(ids []uuid.UUID) []string {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, id.String())
-	}
-	return out
-}
-
-func parseOptionalUUID(s *string) (*uuid.UUID, error) {
-	if s == nil || *s == "" {
-		return nil, nil
-	}
-	id, err := uuid.Parse(*s)
-	if err != nil {
-		return nil, err
-	}
-	return &id, nil
-}
-
-func parseUUIDList(ss []string) ([]uuid.UUID, error) {
-	out := make([]uuid.UUID, 0, len(ss))
-	for _, s := range ss {
-		id, err := uuid.Parse(s)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, nil
 }
 
 func parseOptionalTime(s *string) (*time.Time, error) {

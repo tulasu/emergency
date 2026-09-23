@@ -23,7 +23,7 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-incident-tags",
 		Method:      http.MethodGet,
-		Path:        "/catalog/incident-types/{typeId}/tags",
+		Path:        "/catalog/incident-types/{typeCode}/tags",
 		Summary:     "List tags for incident type",
 		Tags:        []string{"Catalog"},
 		Security:    []map[string][]string{{"session": {}}},
@@ -37,6 +37,15 @@ func Register(api huma.API, a *API) {
 		Tags:        []string{"Catalog"},
 		Security:    []map[string][]string{{"session": {}}},
 	}, a.listServicesHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "recommend-services",
+		Method:      http.MethodGet,
+		Path:        "/catalog/recommend",
+		Summary:     "Recommend services for type and tags",
+		Tags:        []string{"Catalog"},
+		Security:    []map[string][]string{{"session": {}}},
+	}, a.recommendServicesHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-ticket",
@@ -136,21 +145,21 @@ func (a *API) listIncidentTypesHandler(ctx context.Context, in *authHeader) (*st
 	}
 	out := make([]incidentTypeDTO, 0, len(items))
 	for _, it := range items {
-		out = append(out, incidentTypeDTO{ID: it.ID.String(), Code: it.Code, Title: it.Title})
+		out = append(out, incidentTypeDTO{Code: it.Code, Title: it.Title})
 	}
 	return &struct{ Body []incidentTypeDTO }{Body: out}, nil
 }
 
 func (a *API) listTagsHandler(ctx context.Context, in *struct {
-	Authorization string    `header:"Authorization"`
-	TypeID        uuid.UUID `path:"typeId"`
+	Authorization string `header:"Authorization"`
+	TypeCode      string `path:"typeCode"`
 }) (*struct {
 	Body []tagGroupDTO
 }, error) {
 	if _, err := a.requireSignedIn(ctx, in.Authorization); err != nil {
 		return nil, err
 	}
-	items, err := a.listTagsByType.Execute(ctx, in.TypeID)
+	items, err := a.listTagsByType.Execute(ctx, in.TypeCode)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -159,28 +168,19 @@ func (a *API) listTagsHandler(ctx context.Context, in *struct {
 		tags := make([]incidentTagDTO, 0, len(g.Tags))
 		for _, t := range g.Tags {
 			tags = append(tags, incidentTagDTO{
-				ID:             t.ID.String(),
-				IncidentTypeID: t.IncidentTypeID.String(),
-				GroupID:        t.GroupID.String(),
-				Code:           t.Code,
-				Title:          t.Title,
-				SortOrder:      t.SortOrder,
+				Code:      t.Code,
+				Title:     t.Title,
+				SortOrder: t.SortOrder,
 			})
 		}
-		dto := tagGroupDTO{
-			ID:             g.ID.String(),
-			IncidentTypeID: g.IncidentTypeID.String(),
-			Code:           g.Code,
-			Title:          g.Title,
-			SelectionMode:  string(g.SelectionMode),
-			SortOrder:      g.SortOrder,
-			Tags:           tags,
-		}
-		if g.ParentTagID != nil {
-			s := g.ParentTagID.String()
-			dto.ParentTagID = &s
-		}
-		out = append(out, dto)
+		out = append(out, tagGroupDTO{
+			Code:          g.Code,
+			Title:         g.Title,
+			SelectionMode: string(g.SelectionMode),
+			ParentTagCode: g.ParentTagCode,
+			SortOrder:     g.SortOrder,
+			Tags:          tags,
+		})
 	}
 	return &struct{ Body []tagGroupDTO }{Body: out}, nil
 }
@@ -197,9 +197,37 @@ func (a *API) listServicesHandler(ctx context.Context, in *authHeader) (*struct 
 	}
 	out := make([]serviceDTO, 0, len(items))
 	for _, it := range items {
-		out = append(out, serviceDTO{ID: it.ID.String(), Code: it.Code, Title: it.Title})
+		out = append(out, serviceDTO{Code: it.Code, Title: it.Title})
 	}
 	return &struct{ Body []serviceDTO }{Body: out}, nil
+}
+
+func (a *API) recommendServicesHandler(ctx context.Context, in *struct {
+	Authorization string   `header:"Authorization"`
+	Type          string   `query:"type" required:"true"`
+	Tags          []string `query:"tags"`
+}) (*struct {
+	Body struct {
+		ServiceCodes []string `json:"service_codes"`
+	}
+}, error) {
+	if _, err := a.requireSignedIn(ctx, in.Authorization); err != nil {
+		return nil, err
+	}
+	codes, err := a.recommendServices.Execute(ctx, application.RecommendServicesInput{
+		TypeCode: in.Type,
+		TagCodes: in.Tags,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct {
+		Body struct {
+			ServiceCodes []string `json:"service_codes"`
+		}
+	}{Body: struct {
+		ServiceCodes []string `json:"service_codes"`
+	}{ServiceCodes: codes}}, nil
 }
 
 type createTicketInput struct {
@@ -293,9 +321,9 @@ type setReferenceInput struct {
 	Authorization string    `header:"Authorization"`
 	TicketID      uuid.UUID `path:"ticketId"`
 	Body          struct {
-		IncidentTypeID     string   `json:"incident_type_id" format:"uuid"`
-		TagIDs             []string `json:"tag_ids"`
-		ServiceIDs         []string `json:"service_ids"`
+		IncidentTypeCode   string   `json:"incident_type_code" minLength:"1"`
+		TagCodes           []string `json:"tag_codes"`
+		ServiceCodes       []string `json:"service_codes"`
 		ApplicantLastName  string   `json:"applicant_last_name,omitempty"`
 		ApplicantFirstName string   `json:"applicant_first_name,omitempty"`
 		CallerNumber       string   `json:"caller_number,omitempty"`
@@ -310,25 +338,13 @@ func (a *API) setReferenceHandler(ctx context.Context, in *setReferenceInput) (*
 	if err != nil {
 		return nil, err
 	}
-	typeID, err := uuid.Parse(in.Body.IncidentTypeID)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
-	tagIDs, err := parseUUIDList(in.Body.TagIDs)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
-	serviceIDs, err := parseUUIDList(in.Body.ServiceIDs)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
 	ref, err := a.setReferenceAnswer.Execute(ctx, application.SetReferenceAnswerInput{
 		ActorID:            user.ID,
 		Admin:              isAdmin(user),
 		TicketID:           in.TicketID,
-		IncidentTypeID:     typeID,
-		TagIDs:             tagIDs,
-		ServiceIDs:         serviceIDs,
+		IncidentTypeCode:   in.Body.IncidentTypeCode,
+		TagCodes:           in.Body.TagCodes,
+		ServiceCodes:       in.Body.ServiceCodes,
 		ApplicantLastName:  in.Body.ApplicantLastName,
 		ApplicantFirstName: in.Body.ApplicantFirstName,
 		CallerNumber:       in.Body.CallerNumber,
@@ -405,9 +421,9 @@ type saveAnswerInput struct {
 	Authorization string    `header:"Authorization"`
 	AttemptID     uuid.UUID `path:"attemptId"`
 	Body          struct {
-		IncidentTypeID     *string  `json:"incident_type_id,omitempty"`
-		TagIDs             []string `json:"tag_ids"`
-		ServiceIDs         []string `json:"service_ids"`
+		IncidentTypeCode   *string  `json:"incident_type_code,omitempty"`
+		TagCodes           []string `json:"tag_codes"`
+		ServiceCodes       []string `json:"service_codes"`
 		ApplicantLastName  string   `json:"applicant_last_name"`
 		ApplicantFirstName string   `json:"applicant_first_name"`
 		CallerNumber       string   `json:"caller_number"`
@@ -423,25 +439,13 @@ func (a *API) saveAnswerHandler(ctx context.Context, in *saveAnswerInput) (*stru
 	if err != nil {
 		return nil, err
 	}
-	typeID, err := parseOptionalUUID(in.Body.IncidentTypeID)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
-	tagIDs, err := parseUUIDList(in.Body.TagIDs)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
-	serviceIDs, err := parseUUIDList(in.Body.ServiceIDs)
-	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
-	}
 	attempt, err := a.saveAttemptAnswer.Execute(ctx, application.SaveAttemptAnswerInput{
 		ActorID:            user.ID,
 		Admin:              isAdmin(user),
 		AttemptID:          in.AttemptID,
-		IncidentTypeID:     typeID,
-		TagIDs:             tagIDs,
-		ServiceIDs:         serviceIDs,
+		IncidentTypeCode:   in.Body.IncidentTypeCode,
+		TagCodes:           in.Body.TagCodes,
+		ServiceCodes:       in.Body.ServiceCodes,
 		ApplicantLastName:  in.Body.ApplicantLastName,
 		ApplicantFirstName: in.Body.ApplicantFirstName,
 		CallerNumber:       in.Body.CallerNumber,

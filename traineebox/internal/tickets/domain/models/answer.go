@@ -1,7 +1,6 @@
 package models
 
 import (
-	"traineebox/internal/tickets/domain/errs"
 	"traineebox/internal/tickets/domain/value_objects"
 
 	"github.com/google/uuid"
@@ -44,21 +43,4 @@ func NewAnswer(
 
 func EmptyAnswer() Answer {
 	return NewAnswer(nil, nil, nil, "", "", "", "", "")
-}
-
-// ValidateTagsAgainstType ensures tags are only set when an incident type is chosen
-// and that every tag belongs to that type (allowed is the set of valid tag IDs for the type).
-func (a Answer) ValidateTagsAgainstType(allowedByType map[uuid.UUID]struct{}) error {
-	if len(a.TagIDs) == 0 {
-		return nil
-	}
-	if a.IncidentTypeID == nil {
-		return errs.ErrInvalidTags
-	}
-	for _, id := range a.TagIDs {
-		if _, ok := allowedByType[id]; !ok {
-			return errs.ErrInvalidTags
-		}
-	}
-	return nil
 }

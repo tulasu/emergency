@@ -15,4 +15,5 @@ var (
 	ErrAttemptNotActive   = errors.New("attempt not active")
 	ErrNoReferenceAnswer  = errors.New("no reference answer")
 	ErrInvalidTags        = errors.New("tags do not belong to incident type")
+	ErrInvalidTagSelection = errors.New("invalid tag selection")
 )

@@ -142,7 +142,7 @@ func (uc SetReferenceAnswer) Execute(ctx context.Context, in SetReferenceAnswerI
 	if _, err := uc.Catalog.FindIncidentTypeByID(ctx, in.IncidentTypeID); err != nil {
 		return models.ReferenceAnswer{}, err
 	}
-	allowed, err := uc.Catalog.FindTagIDsForType(ctx, in.IncidentTypeID)
+	groups, err := uc.Catalog.ListTagGroupsByType(ctx, in.IncidentTypeID)
 	if err != nil {
 		return models.ReferenceAnswer{}, err
 	}
@@ -153,7 +153,7 @@ func (uc SetReferenceAnswer) Execute(ctx context.Context, in SetReferenceAnswerI
 	if err != nil {
 		return models.ReferenceAnswer{}, err
 	}
-	if err := ref.ValidateTagsAgainstType(allowed); err != nil {
+	if err := ref.ValidateTagSelection(groups); err != nil {
 		return models.ReferenceAnswer{}, err
 	}
 	if len(in.ServiceIDs) > 0 {

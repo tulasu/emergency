@@ -4,11 +4,23 @@ CREATE TABLE incident_types (
     title TEXT NOT NULL
 );
 
-CREATE TABLE incident_tags (
+CREATE TABLE incident_tag_groups (
     id UUID PRIMARY KEY,
     incident_type_id UUID NOT NULL,
     code TEXT NOT NULL,
-    title TEXT NOT NULL
+    title TEXT NOT NULL,
+    selection_mode TEXT NOT NULL,
+    parent_tag_id UUID NULL,
+    sort_order INT NOT NULL
+);
+
+CREATE TABLE incident_tags (
+    id UUID PRIMARY KEY,
+    incident_type_id UUID NOT NULL,
+    group_id UUID NOT NULL,
+    code TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INT NOT NULL
 );
 
 CREATE TABLE emergency_services (

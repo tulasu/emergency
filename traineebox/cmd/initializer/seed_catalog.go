@@ -6,80 +6,12 @@ import (
 
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
+	"traineebox/internal/tickets/domain/models"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
-
-type catalogTypeSeed struct {
-	Code  string
-	Title string
-	Tags  []catalogTagSeed
-}
-
-type catalogTagSeed struct {
-	Code  string
-	Title string
-}
-
-type catalogServiceSeed struct {
-	Code  string
-	Title string
-}
-
-var seedIncidentTypes = []catalogTypeSeed{
-	{Code: "101", Title: "101"},
-	{Code: "102", Title: "102"},
-	{Code: "103", Title: "103"},
-	{Code: "104", Title: "104"},
-	{Code: "accidents_city", Title: "Аварии и происшествия в городском хозяйстве"},
-	{Code: "accidents_transport", Title: "Аварии и происшествия на транспортных объектах"},
-	{Code: "accidents_hydro", Title: "Аварии на гидротехнических сооружениях"},
-	{Code: "accidents_hazardous", Title: "Аварии на опасных и производственных объектах"},
-	{Code: "gratitude", Title: "Благодарность службам"},
-	{Code: "uav", Title: "БПЛА"},
-	{Code: "explosion", Title: "Взрыв"},
-	{Code: "internal_call", Title: "Внутренний звонок (звонок от работников)"},
-	{Code: "foreign_language", Title: "Вызов на иностранном языке"},
-	{Code: "additional_call", Title: "Дополнительный звонок от заявителя"},
-	{Code: "road_obstacles", Title: "Дорожные помехи"},
-	{Code: "traffic_accident", Title: "ДТП"},
-	{Code: "complaint", Title: "Жалоба на действие или бездействие служб"},
-	{Code: "animals", Title: "Животные"},
-	{Code: "consultation", Title: "Консультация"},
-	{Code: "non_target_call", Title: "Нецелевой вызов"},
-	{Code: "collapse", Title: "Обрушение"},
-	{Code: "feedback_112", Title: "Отзыв о работе 112 Москва"},
-	{Code: "call_cancel", Title: "Отмена вызова"},
-	{Code: "wrong_number", Title: "Ошибочно набран номер"},
-	{Code: "shift_handover", Title: "Передача дежурства"},
-	{Code: "assist_services", Title: "Помощь службам"},
-	{Code: "natural_disaster", Title: "Природная стихия"},
-	{Code: "other", Title: "Прочие происшествия"},
-	{Code: "radiation", Title: "Радиация"},
-	{Code: "broken_thermometer", Title: "Разбитый градусник"},
-	{Code: "child_in_danger", Title: "Ребенок в опасности"},
-	{Code: "gathering", Title: "Сбор"},
-	{Code: "water_accumulation", Title: "Скопление воды"},
-	{Code: "fatal_outcome", Title: "Смертельный исход"},
-	{Code: "social_assistance", Title: "Социальная помощь"},
-	{Code: "info_101", Title: "Справка 101"},
-	{Code: "info_102", Title: "Справка 102"},
-	{Code: "info_103", Title: "Справка 103"},
-	{Code: "info_104", Title: "Справка 104"},
-	{Code: "info_gibdd", Title: "Справка ГИБДД"},
-	{Code: "info_city", Title: "Справка Городское хозяйство"},
-	{Code: "info_mchs", Title: "Справка МЧС"},
-	{Code: "test_call", Title: "Тестовый вызов"},
-	{Code: "technical_failure", Title: "Технический сбой (сбой в работе с оборудованием 112 Москва)"},
-	{Code: "training", Title: "Тренировка"},
-	{Code: "emergency_notification", Title: "Уведомление о ЧС"},
-	{Code: "threat_explosion", Title: "Угроза взрыва/террористического акта"},
-	{Code: "threat_hazardous_release", Title: "Угроза выброса опасных веществ и радиации"},
-	{Code: "threat_collapse", Title: "Угроза обрушения"},
-	{Code: "person_in_danger", Title: "Человек в опасности"},
-	{Code: "ecological", Title: "Экологическое происшествие"},
-}
 
 var seedServices = []catalogServiceSeed{
 	{Code: "sluzhba_101", Title: "Служба 101 (ГУ МЧС России по г.Москве, ГКУ \"Пожарно спасательный центр\" ОДС)"},
@@ -322,16 +254,70 @@ func seedCatalog(ctx context.Context, cfg config.Config) error {
 		if err != nil {
 			return fmt.Errorf("incident type %s: %w", t.Code, err)
 		}
-		for _, tag := range t.Tags {
-			if _, err := catalog.UpsertIncidentTag(ctx, it.ID, tag.Code, tag.Title); err != nil {
-				return fmt.Errorf("tag %s/%s: %w", t.Code, tag.Code, err)
-			}
+		if err := seedTypeGroups(ctx, catalog, it.ID, t.Code, t.Groups); err != nil {
+			return err
 		}
 	}
 	for _, s := range seedServices {
 		if _, err := catalog.UpsertService(ctx, s.Code, s.Title); err != nil {
 			return fmt.Errorf("service %s: %w", s.Code, err)
 		}
+	}
+	return nil
+}
+
+func seedTypeGroups(
+	ctx context.Context,
+	catalog *ticketsinfra.CatalogRepository,
+	typeID uuid.UUID,
+	typeCode string,
+	groups []catalogGroupSeed,
+) error {
+	if len(groups) == 0 {
+		return nil
+	}
+	tagIDs := make(map[string]uuid.UUID)
+	pending := append([]catalogGroupSeed(nil), groups...)
+	sortOrder := 0
+	for len(pending) > 0 {
+		next := pending[:0]
+		progressed := false
+		for _, g := range pending {
+			var parent *uuid.UUID
+			if g.ParentTagCode != "" {
+				id, ok := tagIDs[g.ParentTagCode]
+				if !ok {
+					next = append(next, g)
+					continue
+				}
+				parent = &id
+			}
+			mode := g.SelectionMode
+			if mode == "" {
+				mode = models.TagSelectionMulti
+			}
+			grp, err := catalog.UpsertTagGroup(ctx, typeID, g.Code, g.Title, mode, parent, sortOrder)
+			if err != nil {
+				return fmt.Errorf("tag group %s/%s: %w", typeCode, g.Code, err)
+			}
+			sortOrder++
+			for i, tg := range g.Tags {
+				tag, err := catalog.UpsertIncidentTag(ctx, typeID, grp.ID, tg.Code, tg.Title, i)
+				if err != nil {
+					return fmt.Errorf("tag %s/%s/%s: %w", typeCode, g.Code, tg.Code, err)
+				}
+				tagIDs[tg.Code] = tag.ID
+			}
+			progressed = true
+		}
+		if !progressed {
+			codes := make([]string, 0, len(pending))
+			for _, g := range pending {
+				codes = append(codes, g.Code+"(parent="+g.ParentTagCode+")")
+			}
+			return fmt.Errorf("incident type %s: unresolved tag group parents: %v", typeCode, codes)
+		}
+		pending = next
 	}
 	return nil
 }

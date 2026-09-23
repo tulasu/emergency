@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countFinishedAttempts = `-- name: CountFinishedAttempts :one
@@ -579,6 +580,41 @@ func (q *Queries) ListServices(ctx context.Context) ([]EmergencyService, error) 
 	return items, nil
 }
 
+const listTagGroupsByType = `-- name: ListTagGroupsByType :many
+SELECT id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order
+FROM incident_tag_groups
+WHERE incident_type_id = $1
+ORDER BY sort_order, title
+`
+
+func (q *Queries) ListTagGroupsByType(ctx context.Context, incidentTypeID uuid.UUID) ([]IncidentTagGroup, error) {
+	rows, err := q.db.Query(ctx, listTagGroupsByType, incidentTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IncidentTagGroup{}
+	for rows.Next() {
+		var i IncidentTagGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.IncidentTypeID,
+			&i.Code,
+			&i.Title,
+			&i.SelectionMode,
+			&i.ParentTagID,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTagIDsByType = `-- name: ListTagIDsByType :many
 SELECT id
 FROM incident_tags
@@ -606,10 +642,10 @@ func (q *Queries) ListTagIDsByType(ctx context.Context, incidentTypeID uuid.UUID
 }
 
 const listTagsByType = `-- name: ListTagsByType :many
-SELECT id, incident_type_id, code, title
+SELECT id, incident_type_id, group_id, code, title, sort_order
 FROM incident_tags
 WHERE incident_type_id = $1
-ORDER BY title
+ORDER BY sort_order, title
 `
 
 func (q *Queries) ListTagsByType(ctx context.Context, incidentTypeID uuid.UUID) ([]IncidentTag, error) {
@@ -624,8 +660,10 @@ func (q *Queries) ListTagsByType(ctx context.Context, incidentTypeID uuid.UUID) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.IncidentTypeID,
+			&i.GroupID,
 			&i.Code,
 			&i.Title,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -755,32 +793,41 @@ func (q *Queries) UpdateAttemptAnswer(ctx context.Context, arg UpdateAttemptAnsw
 }
 
 const upsertIncidentTag = `-- name: UpsertIncidentTag :one
-INSERT INTO incident_tags (id, incident_type_id, code, title)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (incident_type_id, code) DO UPDATE SET title = EXCLUDED.title
-RETURNING id, incident_type_id, code, title
+INSERT INTO incident_tags (id, incident_type_id, group_id, code, title, sort_order)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (incident_type_id, code) DO UPDATE SET
+    group_id = EXCLUDED.group_id,
+    title = EXCLUDED.title,
+    sort_order = EXCLUDED.sort_order
+RETURNING id, incident_type_id, group_id, code, title, sort_order
 `
 
 type UpsertIncidentTagParams struct {
 	ID             uuid.UUID
 	IncidentTypeID uuid.UUID
+	GroupID        uuid.UUID
 	Code           string
 	Title          string
+	SortOrder      int32
 }
 
 func (q *Queries) UpsertIncidentTag(ctx context.Context, arg UpsertIncidentTagParams) (IncidentTag, error) {
 	row := q.db.QueryRow(ctx, upsertIncidentTag,
 		arg.ID,
 		arg.IncidentTypeID,
+		arg.GroupID,
 		arg.Code,
 		arg.Title,
+		arg.SortOrder,
 	)
 	var i IncidentTag
 	err := row.Scan(
 		&i.ID,
 		&i.IncidentTypeID,
+		&i.GroupID,
 		&i.Code,
 		&i.Title,
+		&i.SortOrder,
 	)
 	return i, err
 }
@@ -856,5 +903,49 @@ func (q *Queries) UpsertService(ctx context.Context, arg UpsertServiceParams) (E
 	row := q.db.QueryRow(ctx, upsertService, arg.ID, arg.Code, arg.Title)
 	var i EmergencyService
 	err := row.Scan(&i.ID, &i.Code, &i.Title)
+	return i, err
+}
+
+const upsertTagGroup = `-- name: UpsertTagGroup :one
+INSERT INTO incident_tag_groups (id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (incident_type_id, code) DO UPDATE SET
+    title = EXCLUDED.title,
+    selection_mode = EXCLUDED.selection_mode,
+    parent_tag_id = EXCLUDED.parent_tag_id,
+    sort_order = EXCLUDED.sort_order
+RETURNING id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order
+`
+
+type UpsertTagGroupParams struct {
+	ID             uuid.UUID
+	IncidentTypeID uuid.UUID
+	Code           string
+	Title          string
+	SelectionMode  string
+	ParentTagID    pgtype.UUID
+	SortOrder      int32
+}
+
+func (q *Queries) UpsertTagGroup(ctx context.Context, arg UpsertTagGroupParams) (IncidentTagGroup, error) {
+	row := q.db.QueryRow(ctx, upsertTagGroup,
+		arg.ID,
+		arg.IncidentTypeID,
+		arg.Code,
+		arg.Title,
+		arg.SelectionMode,
+		arg.ParentTagID,
+		arg.SortOrder,
+	)
+	var i IncidentTagGroup
+	err := row.Scan(
+		&i.ID,
+		&i.IncidentTypeID,
+		&i.Code,
+		&i.Title,
+		&i.SelectionMode,
+		&i.ParentTagID,
+		&i.SortOrder,
+	)
 	return i, err
 }

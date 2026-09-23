@@ -17,8 +17,21 @@ type incidentTypeDTO struct {
 type incidentTagDTO struct {
 	ID             string `json:"id"`
 	IncidentTypeID string `json:"incident_type_id"`
+	GroupID        string `json:"group_id"`
 	Code           string `json:"code"`
 	Title          string `json:"title"`
+	SortOrder      int    `json:"sort_order"`
+}
+
+type tagGroupDTO struct {
+	ID             string           `json:"id"`
+	IncidentTypeID string           `json:"incident_type_id"`
+	Code           string           `json:"code"`
+	Title          string           `json:"title"`
+	SelectionMode  string           `json:"selection_mode"`
+	ParentTagID    *string          `json:"parent_tag_id,omitempty"`
+	SortOrder      int              `json:"sort_order"`
+	Tags           []incidentTagDTO `json:"tags"`
 }
 
 type serviceDTO struct {

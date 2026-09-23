@@ -240,11 +240,11 @@ func validateAnswer(ctx context.Context, catalog repositories.CatalogRepository,
 		if _, err := catalog.FindIncidentTypeByID(ctx, *answer.IncidentTypeID); err != nil {
 			return err
 		}
-		allowed, err := catalog.FindTagIDsForType(ctx, *answer.IncidentTypeID)
+		groups, err := catalog.ListTagGroupsByType(ctx, *answer.IncidentTypeID)
 		if err != nil {
 			return err
 		}
-		if err := answer.ValidateTagsAgainstType(allowed); err != nil {
+		if err := answer.ValidateTagSelection(groups); err != nil {
 			return err
 		}
 	} else if len(answer.TagIDs) > 0 {

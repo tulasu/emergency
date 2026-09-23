@@ -11,6 +11,7 @@ import (
 
 	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
+	"traineebox/internal/tickets/domain/models"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 )
 
@@ -25,7 +26,11 @@ func TestTicketsAttemptFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tag, err := catalog.UpsertIncidentTag(ctx, fire.ID, "building", "Здание")
+	grp, err := catalog.UpsertTagGroup(ctx, fire.ID, "where", "Где", models.TagSelectionSingle, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := catalog.UpsertIncidentTag(ctx, fire.ID, grp.ID, "building", "Здание", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

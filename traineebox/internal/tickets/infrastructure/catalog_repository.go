@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,16 +34,44 @@ func (r *CatalogRepository) ListIncidentTypes(ctx context.Context) ([]models.Inc
 	return out, nil
 }
 
-func (r *CatalogRepository) ListTagsByType(ctx context.Context, typeID uuid.UUID) ([]models.IncidentTag, error) {
-	rows, err := r.q.ListTagsByType(ctx, typeID)
+func (r *CatalogRepository) ListTagGroupsByType(ctx context.Context, typeID uuid.UUID) ([]models.IncidentTagGroup, error) {
+	groupRows, err := r.q.ListTagGroupsByType(ctx, typeID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]models.IncidentTag, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, models.IncidentTag{
-			ID: row.ID, IncidentTypeID: row.IncidentTypeID, Code: row.Code, Title: row.Title,
+	tagRows, err := r.q.ListTagsByType(ctx, typeID)
+	if err != nil {
+		return nil, err
+	}
+
+	tagsByGroup := make(map[uuid.UUID][]models.IncidentTag, len(groupRows))
+	for _, row := range tagRows {
+		tagsByGroup[row.GroupID] = append(tagsByGroup[row.GroupID], models.IncidentTag{
+			ID:             row.ID,
+			IncidentTypeID: row.IncidentTypeID,
+			GroupID:        row.GroupID,
+			Code:           row.Code,
+			Title:          row.Title,
+			SortOrder:      int(row.SortOrder),
 		})
+	}
+
+	out := make([]models.IncidentTagGroup, 0, len(groupRows))
+	for _, row := range groupRows {
+		g := models.IncidentTagGroup{
+			ID:             row.ID,
+			IncidentTypeID: row.IncidentTypeID,
+			Code:           row.Code,
+			Title:          row.Title,
+			SelectionMode:  models.TagSelectionMode(row.SelectionMode),
+			ParentTagID:    pgUUIDPtr(row.ParentTagID),
+			SortOrder:      int(row.SortOrder),
+			Tags:           tagsByGroup[row.ID],
+		}
+		if g.Tags == nil {
+			g.Tags = []models.IncidentTag{}
+		}
+		out = append(out, g)
 	}
 	return out, nil
 }
@@ -69,15 +98,62 @@ func (r *CatalogRepository) UpsertIncidentType(ctx context.Context, code, title 
 	return models.IncidentType{ID: row.ID, Code: row.Code, Title: row.Title}, nil
 }
 
-func (r *CatalogRepository) UpsertIncidentTag(ctx context.Context, typeID uuid.UUID, code, title string) (models.IncidentTag, error) {
+func (r *CatalogRepository) UpsertTagGroup(
+	ctx context.Context,
+	typeID uuid.UUID,
+	code, title string,
+	mode models.TagSelectionMode,
+	parentTagID *uuid.UUID,
+	sortOrder int,
+) (models.IncidentTagGroup, error) {
+	row, err := r.q.UpsertTagGroup(ctx, ticketssql.UpsertTagGroupParams{
+		ID:             uuid.New(),
+		IncidentTypeID: typeID,
+		Code:           code,
+		Title:          title,
+		SelectionMode:  string(mode),
+		ParentTagID:    toPgUUID(parentTagID),
+		SortOrder:      int32(sortOrder),
+	})
+	if err != nil {
+		return models.IncidentTagGroup{}, err
+	}
+	return models.IncidentTagGroup{
+		ID:             row.ID,
+		IncidentTypeID: row.IncidentTypeID,
+		Code:           row.Code,
+		Title:          row.Title,
+		SelectionMode:  models.TagSelectionMode(row.SelectionMode),
+		ParentTagID:    pgUUIDPtr(row.ParentTagID),
+		SortOrder:      int(row.SortOrder),
+		Tags:           []models.IncidentTag{},
+	}, nil
+}
+
+func (r *CatalogRepository) UpsertIncidentTag(
+	ctx context.Context,
+	typeID, groupID uuid.UUID,
+	code, title string,
+	sortOrder int,
+) (models.IncidentTag, error) {
 	row, err := r.q.UpsertIncidentTag(ctx, ticketssql.UpsertIncidentTagParams{
-		ID: uuid.New(), IncidentTypeID: typeID, Code: code, Title: title,
+		ID:             uuid.New(),
+		IncidentTypeID: typeID,
+		GroupID:        groupID,
+		Code:           code,
+		Title:          title,
+		SortOrder:      int32(sortOrder),
 	})
 	if err != nil {
 		return models.IncidentTag{}, err
 	}
 	return models.IncidentTag{
-		ID: row.ID, IncidentTypeID: row.IncidentTypeID, Code: row.Code, Title: row.Title,
+		ID:             row.ID,
+		IncidentTypeID: row.IncidentTypeID,
+		GroupID:        row.GroupID,
+		Code:           row.Code,
+		Title:          row.Title,
+		SortOrder:      int(row.SortOrder),
 	}, nil
 }
 
@@ -102,18 +178,6 @@ func (r *CatalogRepository) FindIncidentTypeByID(ctx context.Context, id uuid.UU
 	return models.IncidentType{ID: row.ID, Code: row.Code, Title: row.Title}, nil
 }
 
-func (r *CatalogRepository) FindTagIDsForType(ctx context.Context, typeID uuid.UUID) (map[uuid.UUID]struct{}, error) {
-	ids, err := r.q.ListTagIDsByType(ctx, typeID)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[uuid.UUID]struct{}, len(ids))
-	for _, id := range ids {
-		out[id] = struct{}{}
-	}
-	return out, nil
-}
-
 func (r *CatalogRepository) ServiceExists(ctx context.Context, ids []uuid.UUID) (bool, error) {
 	if len(ids) == 0 {
 		return true, nil
@@ -124,6 +188,21 @@ func (r *CatalogRepository) ServiceExists(ctx context.Context, ids []uuid.UUID) 
 		return false, err
 	}
 	return int(n) == len(unique), nil
+}
+
+func toPgUUID(id *uuid.UUID) pgtype.UUID {
+	if id == nil {
+		return pgtype.UUID{Valid: false}
+	}
+	return pgtype.UUID{Bytes: *id, Valid: true}
+}
+
+func pgUUIDPtr(u pgtype.UUID) *uuid.UUID {
+	if !u.Valid {
+		return nil
+	}
+	id := uuid.UUID(u.Bytes)
+	return &id
 }
 
 func uniqueUUIDs(ids []uuid.UUID) []uuid.UUID {

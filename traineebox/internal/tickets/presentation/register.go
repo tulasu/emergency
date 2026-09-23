@@ -145,7 +145,7 @@ func (a *API) listTagsHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	TypeID        uuid.UUID `path:"typeId"`
 }) (*struct {
-	Body []incidentTagDTO
+	Body []tagGroupDTO
 }, error) {
 	if _, err := a.requireSignedIn(ctx, in.Authorization); err != nil {
 		return nil, err
@@ -154,13 +154,35 @@ func (a *API) listTagsHandler(ctx context.Context, in *struct {
 	if err != nil {
 		return nil, mapError(err)
 	}
-	out := make([]incidentTagDTO, 0, len(items))
-	for _, it := range items {
-		out = append(out, incidentTagDTO{
-			ID: it.ID.String(), IncidentTypeID: it.IncidentTypeID.String(), Code: it.Code, Title: it.Title,
-		})
+	out := make([]tagGroupDTO, 0, len(items))
+	for _, g := range items {
+		tags := make([]incidentTagDTO, 0, len(g.Tags))
+		for _, t := range g.Tags {
+			tags = append(tags, incidentTagDTO{
+				ID:             t.ID.String(),
+				IncidentTypeID: t.IncidentTypeID.String(),
+				GroupID:        t.GroupID.String(),
+				Code:           t.Code,
+				Title:          t.Title,
+				SortOrder:      t.SortOrder,
+			})
+		}
+		dto := tagGroupDTO{
+			ID:             g.ID.String(),
+			IncidentTypeID: g.IncidentTypeID.String(),
+			Code:           g.Code,
+			Title:          g.Title,
+			SelectionMode:  string(g.SelectionMode),
+			SortOrder:      g.SortOrder,
+			Tags:           tags,
+		}
+		if g.ParentTagID != nil {
+			s := g.ParentTagID.String()
+			dto.ParentTagID = &s
+		}
+		out = append(out, dto)
 	}
-	return &struct{ Body []incidentTagDTO }{Body: out}, nil
+	return &struct{ Body []tagGroupDTO }{Body: out}, nil
 }
 
 func (a *API) listServicesHandler(ctx context.Context, in *authHeader) (*struct {

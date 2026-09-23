@@ -42,12 +42,3 @@ func NewReferenceAnswer(
 		DictatedNumber:     dictated,
 	}, nil
 }
-
-func (r ReferenceAnswer) ValidateTagsAgainstType(allowedByType map[uuid.UUID]struct{}) error {
-	for _, id := range r.TagIDs {
-		if _, ok := allowedByType[id]; !ok {
-			return errs.ErrInvalidTags
-		}
-	}
-	return nil
-}

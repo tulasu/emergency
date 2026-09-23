@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AttemptAnswer struct {
@@ -46,8 +47,20 @@ type GroupMember struct {
 type IncidentTag struct {
 	ID             uuid.UUID
 	IncidentTypeID uuid.UUID
+	GroupID        uuid.UUID
 	Code           string
 	Title          string
+	SortOrder      int32
+}
+
+type IncidentTagGroup struct {
+	ID             uuid.UUID
+	IncidentTypeID uuid.UUID
+	Code           string
+	Title          string
+	SelectionMode  string
+	ParentTagID    pgtype.UUID
+	SortOrder      int32
 }
 
 type IncidentType struct {

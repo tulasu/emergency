@@ -38,7 +38,7 @@ func mapError(err error) error {
 		return huma.Error404NotFound("not found")
 	case errors.Is(err, errs.ErrConflict), errors.Is(err, errs.ErrAttemptInProgress):
 		return huma.Error409Conflict("conflict")
-	case errors.Is(err, errs.ErrInvalidInput), errors.Is(err, errs.ErrInvalidTags):
+	case errors.Is(err, errs.ErrInvalidInput), errors.Is(err, errs.ErrInvalidTags), errors.Is(err, errs.ErrInvalidTagSelection):
 		return huma.Error400BadRequest("invalid input")
 	case errors.Is(err, errs.ErrUnauthorized):
 		return huma.Error401Unauthorized("unauthorized")

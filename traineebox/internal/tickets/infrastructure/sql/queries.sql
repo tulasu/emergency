@@ -3,11 +3,17 @@ SELECT id, code, title
 FROM incident_types
 ORDER BY title;
 
+-- name: ListTagGroupsByType :many
+SELECT id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order
+FROM incident_tag_groups
+WHERE incident_type_id = $1
+ORDER BY sort_order, title;
+
 -- name: ListTagsByType :many
-SELECT id, incident_type_id, code, title
+SELECT id, incident_type_id, group_id, code, title, sort_order
 FROM incident_tags
 WHERE incident_type_id = $1
-ORDER BY title;
+ORDER BY sort_order, title;
 
 -- name: ListServices :many
 SELECT id, code, title
@@ -25,11 +31,24 @@ VALUES ($1, $2, $3)
 ON CONFLICT (code) DO UPDATE SET title = EXCLUDED.title
 RETURNING id, code, title;
 
+-- name: UpsertTagGroup :one
+INSERT INTO incident_tag_groups (id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (incident_type_id, code) DO UPDATE SET
+    title = EXCLUDED.title,
+    selection_mode = EXCLUDED.selection_mode,
+    parent_tag_id = EXCLUDED.parent_tag_id,
+    sort_order = EXCLUDED.sort_order
+RETURNING id, incident_type_id, code, title, selection_mode, parent_tag_id, sort_order;
+
 -- name: UpsertIncidentTag :one
-INSERT INTO incident_tags (id, incident_type_id, code, title)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (incident_type_id, code) DO UPDATE SET title = EXCLUDED.title
-RETURNING id, incident_type_id, code, title;
+INSERT INTO incident_tags (id, incident_type_id, group_id, code, title, sort_order)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (incident_type_id, code) DO UPDATE SET
+    group_id = EXCLUDED.group_id,
+    title = EXCLUDED.title,
+    sort_order = EXCLUDED.sort_order
+RETURNING id, incident_type_id, group_id, code, title, sort_order;
 
 -- name: UpsertService :one
 INSERT INTO emergency_services (id, code, title)

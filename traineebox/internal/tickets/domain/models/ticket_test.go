@@ -37,19 +37,27 @@ func TestTicketAvailabilityAndAttempts(t *testing.T) {
 }
 
 func TestAnswerTagsRequireType(t *testing.T) {
+	typeID := uuid.New()
+	groupID := uuid.New()
 	tagID := uuid.New()
+	groups := []models.IncidentTagGroup{{
+		ID: groupID, IncidentTypeID: typeID, Code: "g", Title: "G",
+		SelectionMode: models.TagSelectionMulti,
+		Tags: []models.IncidentTag{
+			{ID: tagID, IncidentTypeID: typeID, GroupID: groupID, Code: "t", Title: "T"},
+		},
+	}}
 	ans := models.NewAnswer(nil, []uuid.UUID{tagID}, nil, "", "", "", "", "")
-	if err := ans.ValidateTagsAgainstType(map[uuid.UUID]struct{}{tagID: {}}); err != errs.ErrInvalidTags {
+	if err := ans.ValidateTagSelection(groups); err != errs.ErrInvalidTags {
 		t.Fatalf("got %v", err)
 	}
-	typeID := uuid.New()
 	ans = models.NewAnswer(&typeID, []uuid.UUID{tagID}, nil, "", "", "", "", "")
-	if err := ans.ValidateTagsAgainstType(map[uuid.UUID]struct{}{tagID: {}}); err != nil {
+	if err := ans.ValidateTagSelection(groups); err != nil {
 		t.Fatal(err)
 	}
 	foreign := uuid.New()
 	ans = models.NewAnswer(&typeID, []uuid.UUID{foreign}, nil, "", "", "", "", "")
-	if err := ans.ValidateTagsAgainstType(map[uuid.UUID]struct{}{tagID: {}}); err != errs.ErrInvalidTags {
+	if err := ans.ValidateTagSelection(groups); err != errs.ErrInvalidTags {
 		t.Fatalf("got %v", err)
 	}
 }

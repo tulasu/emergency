@@ -98,6 +98,10 @@ class Renderer:
             d.mood,
         )
 
+    def urge_text(self, d: Decision) -> str:
+        """Напоминание заявителя («Вы записали, адрес?») или пусто."""
+        return URGE[d.mood].format(what=self._name(d.unprompted)) if d.unprompted else ""
+
     def _name(self, key: str) -> str:
         """Как заявитель называет сведение, о котором сам напоминает.
 

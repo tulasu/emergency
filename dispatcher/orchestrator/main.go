@@ -75,7 +75,7 @@ func newCallID() string {
 func (h *Hub) originate(to, scenario, callID string, port int) error {
 	form := url.Values{}
 	form.Set("endpoint", "PJSIP/"+to)
-	form.Set("context", "trainer-out")
+	form.Set("context", "trainer-in")
 	form.Set("extension", "s")
 	form.Set("priority", "1")
 	form.Set("variables",
@@ -124,7 +124,15 @@ func (h *Hub) handleCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"no rtp port"}`, 500)
 		return
 	}
+	// открываем Python-сессию ДО originate: AudioSocket-листенер иначе
+	// закрывает коннект на пустом SVC.sessions (см. serve.py).
+	if err := pyOpen(h.cfg.PyURL, in.ScenarioID, c.ID); err != nil {
+		h.drop(c.ID)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, 502)
+		return
+	}
 	if err := h.originate(in.To, in.ScenarioID, c.ID, port); err != nil {
+		pyClose(h.cfg.PyURL, c.ID)
 		h.drop(c.ID)
 		http.Error(w, `{"error":"originate failed"}`, 502)
 		return

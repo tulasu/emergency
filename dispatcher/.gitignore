@@ -4,5 +4,9 @@ __pycache__/
 .pytest_cache/
 data/build/
 data/cache/
+# generated training audio + recorded test calls (large, reproducible from scripts)
+data/audio/
+data/calls/
 models/
 orchestrator/orchestrator
+.env

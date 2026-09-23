@@ -55,7 +55,28 @@ def test_reask_detected(text):
 
 def test_assertion_not_a_question():
     assert detect_act("Записываю ваш адрес") is Act.CONFIRM
-    assert detect_act("Хорошо") is Act.ASSERT
+    assert detect_act("Пострадавших нет") is Act.ASSERT
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["хорошо", "я понял все спасибо большое", "ага понятно",
+     "я понял спасибо служба уже в пути", "хорошо передаю службам вашу заявку",
+     "сто двенадцать говорите"],
+)
+def test_ack_is_speech_act(text):
+    # принято/сообщение — заявителю хватит «да, поняла», а не случайного факта
+    assert detect_act(text) is Act.SPEECH_ACT
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["хорошо можете сказать адрес дома",
+     "алло здравствуйте служба сто двенадцать что у вас случилось",
+     "ага хорошо пострадавшие есть"],
+)
+def test_ack_lead_keeps_question(text):
+    assert detect_act(text) is not Act.SPEECH_ACT
 
 
 @pytest.mark.parametrize(

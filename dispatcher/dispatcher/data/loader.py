@@ -165,7 +165,10 @@ def _merge_audio_index(scenarios: dict[str, Scenario]) -> None:
     for aid, rel in files.items():
         if not aid.startswith("a/"):
             continue
-        _, sid, fkey_fs, style_ext = aid.split("/", 3)
+        parts = aid.split("/", 3)
+        if len(parts) < 4:
+            continue  # opening.wav: a/<sid>/opening.wav, без ключа/стиля
+        _, sid, fkey_fs, style_ext = parts
         style = style_ext.removesuffix(".wav")
         sc = scenarios.get(sid)
         if sc is None:

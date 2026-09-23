@@ -580,5 +580,26 @@ class Cascade:
             source=source,
         )
 
+    def candidates(self, text: str, k: int = 5) -> list[str]:
+        """Лучшие k слотов по всем 88 — кандидаты для голосования.
+
+        Берутся все слоты, а не только сценария: голосующий должен иметь
+        возможность выбрать вопрос, на который у заявителя ответа нет.
+        """
+        overall: dict[str, float] = {}
+        for scores in self._score(text, rules.detect_act(text)):
+            for slot, v in scores.items():
+                if v > overall.get(slot, float("-inf")):
+                    overall[slot] = v
+        return [s for s, _ in sorted(overall.items(), key=lambda x: -x[1])[:k]]
+
+    def rewrap(self, text: str, u: Understanding, slots: list[str],
+               source: str) -> Understanding:
+        """То же понимание с другими слотами: ключи и сверка чисел заново."""
+        out = self._wrap(text, slots, u.act, u.score, normalize.words(text),
+                         normalize.topical_lemmas(text), source)
+        out.latency_ms = u.latency_ms
+        return out
+
     def save(self) -> None:
         """Кэшировать нечего — совместимость с сессией."""

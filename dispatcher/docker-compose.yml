@@ -1,4 +1,14 @@
 # Шаг 7. Highload: ферма за балансировщиком. Один GPU = один python-воркер.
+# Запуск: just up (из корня) поднимет и postgres+caddy, и этот стек.
+# Override через .env / переменные окружения:
+#   DISPATCHER_MODEL=e5-small-tuned   включить вектора
+#   DISPATCHER_BACKEND=onnx           onnx (CPU) | torch (GPU)
+#   DISPATCHER_DEVICE=cpu             cpu | cuda
+#   DISPATCHER_ARBITER=laya           спорные реплики в Laya (без неё выключен)
+#   DISPATCHER_ENSEMBLE=majority      голосование e5 + laya + LLM (сервис llama)
+#   DISPATCHER_IMPROV=1               ответы вне сценария от LLM, живой Silero
+# GPU: нужен NVIDIA Container Toolkit (docker run --gpus all ubuntu nvidia-smi).
+
 services:
   asterisk:
     image: andrius/asterisk:20
@@ -6,41 +16,86 @@ services:
     volumes:
       - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
       - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      # ARI для originate из оркестратора — без них HTTP-сервер выключен
+      - ./asterisk/http.conf:/etc/asterisk/http.conf:ro
+      - ./asterisk/ari.conf:/etc/asterisk/ari.conf:ro
     deploy:
       replicas: 1 # дальше: +Kamailio впереди, реплик K
 
+  # llama-server для голоса LLM и ответов вне сценария (Qwen3-4B-Instruct)
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    network_mode: host
+    volumes:
+      - ./models/llama:/models:ro
+    command:
+      - -m
+      - /models/${DISPATCHER_LLM:-Qwen3-4B-Instruct-2507-Q4_K_M.gguf}
+      - -ngl
+      - "99"
+      - -c
+      - "4096" # 2 слота по 2048: промпт голосования и импровизации влезает
+      - -np
+      - "2"
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8081"
+      - --no-webui
+    healthcheck: # в образе проверка на 8080, а слушаем 8081
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/health"]
+      interval: 10s
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+
   python:
-    build: .
-    command: >-
-      python3 -m dispatcher.serve --port 8000
-      --model e5-small-tuned --backend torch --device cuda
-      --arbiter laya --thin-rescue --require-cuda
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    network_mode: host # один стек с orchestrator/asterisk, проще DNS
     environment:
-      HF_HUB_OFFLINE: 1
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
       DISPATCHER_MODELS: /app/models
+      # веса laya лежат в models/hub; задаём до любого импорта huggingface_hub —
+      # setdefault в nlu/laya.py опаздывает, если transformers импортирован раньше
+      HF_HOME: /app/models
+      DISPATCHER_LLM_URL: http://127.0.0.1:8081
+      GIGAAM_MODEL_PATH: /app/models/gigaam-v2-ctc
+      DISPATCHER_MODEL: ${DISPATCHER_MODEL:-}
+      DISPATCHER_BACKEND: ${DISPATCHER_BACKEND:-}
+      DISPATCHER_DEVICE: ${DISPATCHER_DEVICE:-}
+      DISPATCHER_ARBITER: ${DISPATCHER_ARBITER:-}
+      DISPATCHER_STT: ${DISPATCHER_STT:-}
+      DISPATCHER_ENSEMBLE: ${DISPATCHER_ENSEMBLE:-}
+      DISPATCHER_IMPROV: ${DISPATCHER_IMPROV:-}
     volumes:
       - ./models:/app/models:ro
-      - ./data/audio:/app/data/audio:ro # предрендер шага 2
+      - ${HOME}/.cache/torch/hub:/root/.cache/torch/hub:ro # Silero для живых ответов
+      - ./data/ontology:/app/data/ontology:ro
+      - ./data/scenarios:/app/data/scenarios:ro
+      - ./data/gold:/app/data/gold:ro
+      - ./data/blind:/app/data/blind:ro
+      - ./data/audio:/app/data/audio # предрендер шага 2 — запись
+      - ./data/calls:/app/data/calls # лог фраз оператора (wav + turns.jsonl)
+    depends_on:
+      - llama
     deploy:
       replicas: 1 # M = звонки / ~50-100 сессий на GPU, уточнить нагрузочным
       resources:
         reservations:
-          devices: [{driver: nvidia, count: 1}]
-    healthcheck:
-      test: ["CMD", "python3", "-c",
-        "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5).status==200 else 1)"]
-      interval: 10s
-      start_period: 120s # прогрев энкодера + арбитра (~минута)
-    deploy:
-      replicas: 1 # M = звонки / ~50-100 сессий на GPU, уточнить нагрузочным
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
 
   orchestrator:
     build: ./orchestrator
-    ports: ["8080:8080"]
+    network_mode: host # ARI на 127.0.0.1:8088 (asterisk — host network)
     environment:
-      ARI_URL: http://asterisk:8088/ari
-      PY_URL: http://python:8000
-      RTP_BASE: 10000
-    depends_on: [asterisk, python]
+      ARI_URL: http://127.0.0.1:8088/ari
+      PY_URL: http://127.0.0.1:8000
+      RTP_BASE: "10000"
+    depends_on:
+      - asterisk
+      - python
     deploy:
-      replicas: 2 # stateless, HPA по inflight
+      replicas: 1 # host network не дружит с replicas>1, HPA через K8s/HostPort

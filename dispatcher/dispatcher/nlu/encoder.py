@@ -60,6 +60,10 @@ REGISTRY: dict[str, Spec] = {
     # дообученный на формулировках корпуса; веса только локальные,
     # собираются через tools/train_encoder.py
     "e5-small-tuned": Spec("", 384, query_prefix="query: ", passage_prefix="passage: "),
+    # то же + двойники формулировок в стиле STT (tools/train_encoder.py --stt-aug)
+    "e5-small-tuned-rerun": Spec("", 384, query_prefix="query: ", passage_prefix="passage: "),
+    "e5-small-tuned-stt-plain": Spec("", 384, query_prefix="query: ", passage_prefix="passage: "),
+    "e5-small-tuned-stt": Spec("", 384, query_prefix="query: ", passage_prefix="passage: "),
 }
 
 

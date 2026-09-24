@@ -2,6 +2,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 # postgres+caddy — этот корень (cue -> docker-compose.yml)
 root_compose := "docker-compose.yml"
+asterisk_compose := "config/asterisk/docker-compose.yml"
 
 [private]
 default:
@@ -20,6 +21,13 @@ up: generate
 
 down:
     docker compose -f {{root_compose}} down
+
+# только asterisk (SIP/ARI для traineebox+dialog)
+up-asterisk:
+    docker compose -f {{asterisk_compose}} up -d
+
+down-asterisk:
+    docker compose -f {{asterisk_compose}} down
 
 test:
     cd traineebox; go test ./... -count=1 -timeout 10m

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countFinishedAttempts = `-- name: CountFinishedAttempts :one
@@ -73,7 +72,7 @@ INSERT INTO attempt_answers (
 
 type CreateAttemptAnswerParams struct {
 	AttemptID          uuid.UUID
-	IncidentTypeCode   pgtype.Text
+	IncidentTypeCode   *string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string
@@ -596,7 +595,7 @@ WHERE attempt_id = $1
 
 type UpdateAttemptAnswerParams struct {
 	AttemptID          uuid.UUID
-	IncidentTypeCode   pgtype.Text
+	IncidentTypeCode   *string
 	ApplicantLastName  string
 	ApplicantFirstName string
 	CallerNumber       string

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ticketgen"
+dynamic = ["version"]
+description = "AI pipeline for TraineeBox ticket generation"
+requires-python = ">=3.11"
+dependencies = [
+  "pyyaml>=6.0",
+  "psycopg[binary]>=3.1",
+  "Faker>=24.0",
+]
+
+[project.scripts]
+ticketgen-worker = "worker:main"
+
+[tool.hatch.version]
+path = "../VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = [
+  "catalog.py",
+  "llm.py",
+  "pipeline.py",
+  "worker.py",
+]

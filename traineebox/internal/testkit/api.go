@@ -11,6 +11,10 @@ import (
 	autherrs "traineebox/internal/auth/domain/errs"
 	authinfra "traineebox/internal/auth/infrastructure"
 	authpresentation "traineebox/internal/auth/presentation"
+	genapp "traineebox/internal/generation/application"
+	generrs "traineebox/internal/generation/domain/errs"
+	geninfra "traineebox/internal/generation/infrastructure"
+	genpresentation "traineebox/internal/generation/presentation"
 	groupsapp "traineebox/internal/groups/application"
 	groupserrs "traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/value_objects"
@@ -91,6 +95,37 @@ func mapTicketsAuthError(err error) error {
 	}
 }
 
+type generationSessionAuthenticator struct {
+	auth application.Authenticate
+}
+
+func (a generationSessionAuthenticator) CurrentUser(ctx context.Context, token string) (genapp.SessionUser, error) {
+	user, err := a.auth.Execute(ctx, token)
+	if err != nil {
+		return genapp.SessionUser{}, mapGenerationAuthError(err)
+	}
+	role, err := ticketsvo.ParseAccountRole(string(user.Role))
+	if err != nil {
+		return genapp.SessionUser{}, err
+	}
+	return genapp.SessionUser{ID: user.ID, Role: role}, nil
+}
+
+func mapGenerationAuthError(err error) error {
+	switch {
+	case errors.Is(err, autherrs.ErrUnauthorized):
+		return generrs.ErrUnauthorized
+	case errors.Is(err, autherrs.ErrUserBlocked):
+		return generrs.ErrUserBlocked
+	case errors.Is(err, autherrs.ErrNotFound):
+		return generrs.ErrNotFound
+	case errors.Is(err, autherrs.ErrForbidden):
+		return generrs.ErrForbidden
+	default:
+		return err
+	}
+}
+
 func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	t.Helper()
 
@@ -135,21 +170,38 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
 	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
 	membership := ticketsinfra.NewGroupMembership(pool)
+	createTicketUC := ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership}
+	setReferenceUC := ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership}
 	ticketsHandlers := ticketspresentation.NewAPI(ticketspresentation.Deps{
 		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
 		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
 		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
 		RecommendServices:  ticketsapp.RecommendServices{Catalog: catalogRepo},
-		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
+		CreateTicket:       createTicketUC,
 		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
 		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},
-		SetReferenceAnswer: ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership},
+		SetReferenceAnswer: setReferenceUC,
 		StartAttempt:       ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		SaveAttemptAnswer:  ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
 		SubmitAttempt:      ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
 		GetMyAttempt:       ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		ListMyAttempts:     ticketsapp.ListMyAttempts{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		Authenticate:       ticketsSessionAuthenticator{auth: authenticate},
+	})
+
+	jobsRepo := geninfra.NewJobRepository(pool)
+	genHandlers := genpresentation.NewAPI(genpresentation.Deps{
+		CreateJob:  genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
+		ListJobs:   genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
+		GetJob:     genapp.GetJob{Jobs: jobsRepo, Membership: membership},
+		PatchJob:   genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
+		RetryJob:   genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
+		CancelJob:  genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
+		DeleteJob:  genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
+		ApproveJob: genapp.ApproveJob{
+			Jobs: jobsRepo, Membership: membership, Tickets: ticketsRepo, Catalog: catalogRepo,
+		},
+		Authenticate: generationSessionAuthenticator{auth: authenticate},
 	})
 
 	router := chi.NewMux()
@@ -165,5 +217,6 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	authpresentation.Register(api, authHandlers)
 	groupspresentation.Register(api, groupsHandlers)
 	ticketspresentation.Register(api, ticketsHandlers)
+	genpresentation.Register(api, genHandlers)
 	return router
 }

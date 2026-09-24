@@ -24,6 +24,7 @@ type TicketRepository interface {
 	ListByGroup(ctx context.Context, groupID uuid.UUID) ([]models.Ticket, error)
 	SaveReference(ctx context.Context, ref models.ReferenceAnswer) error
 	FindReference(ctx context.Context, ticketID uuid.UUID) (models.ReferenceAnswer, error)
+	CreateWithReference(ctx context.Context, ticket models.Ticket, ref models.ReferenceAnswer) error
 }
 
 type AttemptRepository interface {

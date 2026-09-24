@@ -141,7 +141,7 @@ func Truncate(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(ctx, `
 		TRUNCATE attempt_answer_services, attempt_answer_tags, attempt_answers,
 		         ticket_attempts, reference_answer_services, reference_answer_tags,
-		         ticket_reference_answers, tickets,
+		         ticket_reference_answers, ticket_generation_jobs, tickets,
 		         group_members, groups, sessions, users
 		CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

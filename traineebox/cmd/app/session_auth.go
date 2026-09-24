@@ -6,6 +6,8 @@ import (
 
 	authapp "traineebox/internal/auth/application"
 	autherrs "traineebox/internal/auth/domain/errs"
+	genapp "traineebox/internal/generation/application"
+	generrs "traineebox/internal/generation/domain/errs"
 	groupsapp "traineebox/internal/groups/application"
 	groupserrs "traineebox/internal/groups/domain/errs"
 	groupsvo "traineebox/internal/groups/domain/value_objects"
@@ -71,6 +73,37 @@ func mapTicketsAuthError(err error) error {
 		return ticketserrs.ErrNotFound
 	case errors.Is(err, autherrs.ErrForbidden):
 		return ticketserrs.ErrForbidden
+	default:
+		return err
+	}
+}
+
+type generationSessionAuthenticator struct {
+	auth authapp.Authenticate
+}
+
+func (a generationSessionAuthenticator) CurrentUser(ctx context.Context, token string) (genapp.SessionUser, error) {
+	user, err := a.auth.Execute(ctx, token)
+	if err != nil {
+		return genapp.SessionUser{}, mapGenerationAuthError(err)
+	}
+	role, err := ticketsvo.ParseAccountRole(string(user.Role))
+	if err != nil {
+		return genapp.SessionUser{}, err
+	}
+	return genapp.SessionUser{ID: user.ID, Role: role}, nil
+}
+
+func mapGenerationAuthError(err error) error {
+	switch {
+	case errors.Is(err, autherrs.ErrUnauthorized):
+		return generrs.ErrUnauthorized
+	case errors.Is(err, autherrs.ErrUserBlocked):
+		return generrs.ErrUserBlocked
+	case errors.Is(err, autherrs.ErrNotFound):
+		return generrs.ErrNotFound
+	case errors.Is(err, autherrs.ErrForbidden):
+		return generrs.ErrForbidden
 	default:
 		return err
 	}

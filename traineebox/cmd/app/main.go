@@ -12,6 +12,9 @@ import (
 	"traineebox/internal/auth/application"
 	authinfra "traineebox/internal/auth/infrastructure"
 	authpresentation "traineebox/internal/auth/presentation"
+	genapp "traineebox/internal/generation/application"
+	geninfra "traineebox/internal/generation/infrastructure"
+	genpresentation "traineebox/internal/generation/presentation"
 	groupsapp "traineebox/internal/groups/application"
 	groupsinfra "traineebox/internal/groups/infrastructure"
 	groupspresentation "traineebox/internal/groups/presentation"
@@ -78,21 +81,38 @@ func main() {
 	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
 	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
 	membership := ticketsinfra.NewGroupMembership(pool)
+	createTicketUC := ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership}
+	setReferenceUC := ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership}
 	ticketsHandlers := ticketspresentation.NewAPI(ticketspresentation.Deps{
 		ListIncidentTypes:  ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
 		ListTagsByType:     ticketsapp.ListTagsByType{Catalog: catalogRepo},
 		ListServices:       ticketsapp.ListServices{Catalog: catalogRepo},
 		RecommendServices:  ticketsapp.RecommendServices{Catalog: catalogRepo},
-		CreateTicket:       ticketsapp.CreateTicket{Tickets: ticketsRepo, Membership: membership},
+		CreateTicket:       createTicketUC,
 		ListTicketsByGroup: ticketsapp.ListTicketsByGroup{Tickets: ticketsRepo, Membership: membership},
 		GetTicket:          ticketsapp.GetTicket{Tickets: ticketsRepo, Membership: membership},
-		SetReferenceAnswer: ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo, Membership: membership},
+		SetReferenceAnswer: setReferenceUC,
 		StartAttempt:       ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		SaveAttemptAnswer:  ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
 		SubmitAttempt:      ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo, Membership: membership},
 		GetMyAttempt:       ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		ListMyAttempts:     ticketsapp.ListMyAttempts{Tickets: ticketsRepo, Attempts: attemptsRepo, Membership: membership},
 		Authenticate:       ticketsSessionAuthenticator{auth: authenticate},
+	})
+
+	jobsRepo := geninfra.NewJobRepository(pool)
+	genHandlers := genpresentation.NewAPI(genpresentation.Deps{
+		CreateJob:  genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
+		ListJobs:   genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
+		GetJob:     genapp.GetJob{Jobs: jobsRepo, Membership: membership},
+		PatchJob:   genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
+		RetryJob:   genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
+		CancelJob:  genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
+		DeleteJob:  genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
+		ApproveJob: genapp.ApproveJob{
+			Jobs: jobsRepo, Membership: membership, Tickets: ticketsRepo, Catalog: catalogRepo,
+		},
+		Authenticate: generationSessionAuthenticator{auth: authenticate},
 	})
 
 	router := chi.NewMux()
@@ -108,6 +128,7 @@ func main() {
 	authpresentation.Register(api, authHandlers)
 	groupspresentation.Register(api, groupsHandlers)
 	ticketspresentation.Register(api, ticketsHandlers)
+	genpresentation.Register(api, genHandlers)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -130,6 +130,55 @@ func (r *TicketRepository) FindReference(ctx context.Context, ticketID uuid.UUID
 	}, nil
 }
 
+func (r *TicketRepository) CreateWithReference(ctx context.Context, ticket models.Ticket, ref models.ReferenceAnswer) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := r.q.WithTx(tx)
+	if err := q.CreateTicket(ctx, ticketssql.CreateTicketParams{
+		ID:              ticket.ID,
+		GroupID:         ticket.GroupID,
+		Title:           ticket.Title.String(),
+		Body:            ticket.Body,
+		MaxAttempts:     intPtrToInt32(ticket.MaxAttempts),
+		AvailableFrom:   ticket.AvailableFrom,
+		AvailableUntil:  ticket.AvailableUntil,
+		DurationSeconds: intPtrToInt32(ticket.DurationSeconds),
+		CreatedBy:       ticket.CreatedBy,
+		CreatedAt:       ticket.CreatedAt,
+	}); err != nil {
+		return err
+	}
+	if err := q.UpsertReferenceAnswer(ctx, ticketssql.UpsertReferenceAnswerParams{
+		TicketID:           ref.TicketID,
+		IncidentTypeCode:   ref.IncidentTypeCode,
+		ApplicantLastName:  ref.ApplicantLastName,
+		ApplicantFirstName: ref.ApplicantFirstName,
+		CallerNumber:       ref.CallerNumber,
+		DictatedNumber:     ref.DictatedNumber,
+	}); err != nil {
+		return err
+	}
+	for _, tagCode := range ref.TagCodes {
+		if err := q.InsertReferenceAnswerTag(ctx, ticketssql.InsertReferenceAnswerTagParams{
+			TicketID: ref.TicketID, TagCode: tagCode,
+		}); err != nil {
+			return err
+		}
+	}
+	for _, serviceCode := range ref.ServiceCodes {
+		if err := q.InsertReferenceAnswerService(ctx, ticketssql.InsertReferenceAnswerServiceParams{
+			TicketID: ref.TicketID, ServiceCode: serviceCode,
+		}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func mapTicket(row ticketssql.Ticket) models.Ticket {
 	return models.Ticket{
 		ID:              row.ID,

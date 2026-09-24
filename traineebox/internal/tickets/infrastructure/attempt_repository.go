@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -53,7 +52,7 @@ func (r *AttemptRepository) Create(ctx context.Context, attempt models.Attempt) 
 	now := time.Now().UTC()
 	if err := q.CreateAttemptAnswer(ctx, ticketssql.CreateAttemptAnswerParams{
 		AttemptID:          attempt.ID,
-		IncidentTypeCode:   textPtr(attempt.Answer.IncidentTypeCode),
+		IncidentTypeCode:   attempt.Answer.IncidentTypeCode,
 		ApplicantLastName:  attempt.Answer.ApplicantLastName,
 		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
 		CallerNumber:       attempt.Answer.CallerNumber,
@@ -144,7 +143,7 @@ func (r *AttemptRepository) Save(ctx context.Context, attempt models.Attempt) er
 	now := time.Now().UTC()
 	if err := q.UpdateAttemptAnswer(ctx, ticketssql.UpdateAttemptAnswerParams{
 		AttemptID:          attempt.ID,
-		IncidentTypeCode:   textPtr(attempt.Answer.IncidentTypeCode),
+		IncidentTypeCode:   attempt.Answer.IncidentTypeCode,
 		ApplicantLastName:  attempt.Answer.ApplicantLastName,
 		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
 		CallerNumber:       attempt.Answer.CallerNumber,
@@ -212,26 +211,11 @@ func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.Tick
 		FinishedAt: row.FinishedAt,
 		Score:      int16PtrToInt(row.Score),
 		Answer: models.NewAnswer(
-			textToPtr(ans.IncidentTypeCode), tags, services,
+			ans.IncidentTypeCode, tags, services,
 			ans.ApplicantLastName, ans.ApplicantFirstName,
 			ans.CallerNumber, ans.DictatedNumber, notes,
 		),
 	}, nil
-}
-
-func textPtr(s *string) pgtype.Text {
-	if s == nil {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *s, Valid: true}
-}
-
-func textToPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	s := t.String
-	return &s
 }
 
 func intPtrToInt16(v *int) *int16 {

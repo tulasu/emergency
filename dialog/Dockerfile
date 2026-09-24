@@ -2,9 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 COPY dialog/ ./dialog/
-COPY dispatcher/ ./dispatcher/
 ENV PYTHONUNBUFFERED=1 \
-    DISPATCHER_PATH=/app/dispatcher \
     DIALOG_WAV_DIR=/tmp/dialog-wav
 # Unprivileged runtime: binds 8000/9001 only, wavs stay on a tmp volume.
 USER nobody

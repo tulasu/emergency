@@ -248,3 +248,194 @@ def test_bank_digest_parity_fixture():
         "common.floor": ["этаж"],
     }
     assert digest_of(slots, questions) == "5174a6af863e067c"
+
+
+def test_reload_carries_ontology():
+    """Reload swaps bank+ontology together; in-flight keeps old pair (CAP-4)."""
+    import uuid
+    old_onto = serve.onto()
+    try:
+        a = uuid.uuid4().hex
+        serve.open_session(a, snap_a())
+        bank_a, onto_a = serve.entry(a)["bank"], serve.entry(a)["onto"]
+
+        slots2 = {"t.addr": "адрес", "t.floor": "этаж", "t.name": "имя"}
+        questions2 = {
+            "t.addr": ["назовите адрес", "какой адрес происшествия"],
+            "t.floor": ["на каком этаже горит", "какой этаж в огне"],
+            "t.name": ["как вас зовут", "назовитесь пожалуйста"],
+        }
+        onto2 = {"version": "v12", "slots": [
+            {"id": "t.addr", "label": "адрес", "kind": "value",
+             "aliases": ["адрес"], "fallback": [], "questions": [],
+             "urge": "", "disclosure": "volunteered", "since": "0.1"},
+            {"id": "t.floor", "label": "этаж", "kind": "value",
+             "aliases": ["этаж"], "fallback": [], "questions": [],
+             "urge": "", "disclosure": "volunteered", "since": "0.1"},
+            {"id": "t.name", "label": "имя", "kind": "value",
+             "aliases": ["имя"], "fallback": [], "questions": [],
+             "urge": "", "disclosure": "volunteered", "since": "0.1"},
+        ], "overrides": {}}
+        bank2 = Bank.build("v2", slots2, questions2)
+        serve._reload_background("v2", bank2.digest, slots2, questions2,
+                                 ontology=onto2)
+        assert serve.HOLDER.current.digest == bank2.digest
+        assert serve.onto().version == "v12"
+        assert set(serve.onto().slots) == {"t.addr", "t.floor", "t.name"}
+        assert serve.onto().by_alias["адрес"] == "t.addr"
+        # in-flight finishes on the old pair
+        assert serve.entry(a)["bank"] is bank_a
+        assert serve.entry(a)["onto"] is onto_a
+        # new sessions use the new pair; open+lint work with no data files
+        b = uuid.uuid4().hex
+        serve.open_session(b, snap_a())
+        assert serve.entry(b)["bank"].digest == bank2.digest
+        assert serve.entry(b)["onto"] is serve.onto()
+        assert serve.final(b, "Назовите адрес")["text"]
+        out = serve.lint_scenario(snap_a())
+        assert out["id"] == "test_a"
+        # reload without ontology: bank swaps, ontology kept
+        bank3 = Bank.build("v3", slots2, questions2)
+        serve._reload_background("v3", bank3.digest, slots2, questions2)
+        assert serve.HOLDER.current.digest == bank3.digest
+        assert serve.onto().version == "v12"
+        # bad kind: old pair kept, failure counted
+        f0 = serve.HOLDER.failures
+        serve._reload_background("vbad", "", slots2, questions2, ontology={
+            "version": "bad", "slots": [{"id": "t.x", "label": "x",
+                                         "kind": "nope"}]})
+        assert serve.HOLDER.current.digest == bank3.digest
+        assert serve.onto().version == "v12"
+        assert serve.HOLDER.failures == f0 + 1
+        with pytest.raises(ValueError):
+            serve.ontology_from_snapshot({"version": "bad", "slots": [
+                {"id": "t.x", "label": "x", "kind": "nope"}]})
+        serve.close(a)
+        serve.close(b)
+    finally:
+        serve.ONTO = old_onto
+
+
+def test_empty_boot_contract():
+    """Before first reload: fetch raises, open/lint rejected, no crash (matrix).
+
+    NOTE: frozen matrix row 'Lint on empty bank' says 'report'; code rejects
+    with SnapshotError (same as open, AD-7 drift). Test pins code behavior;
+    matrix needs a one-line human-approved correction.
+    """
+    import os
+    import uuid
+    if os.environ.get("TRAINEEBOX_BANK_URL"):
+        pytest.skip("TRAINEEBOX_BANK_URL set: boot would fetch, not stay empty")
+    with pytest.raises(RuntimeError):
+        serve._fetch_bank("boot")
+    assert Bank.build("empty", {}, {}).digest == serve.BankHolder().current.digest
+    prev = serve.HOLDER.current
+    try:
+        serve.HOLDER.swap(Bank.build("empty", {}, {}))
+        with pytest.raises(SnapshotError):
+            serve.open_session(uuid.uuid4().hex, snap_a())
+        assert serve.SESSIONS == {}  # call never starts
+        with pytest.raises(SnapshotError):
+            serve.lint_scenario(snap_a())
+    finally:
+        serve.HOLDER.swap(prev)
+
+
+def test_bank_reload_http_swaps_onto():
+    """POST /bank/reload carrying ontology swaps serve.onto() (HTTP-level).
+
+    Direct-call reload tests would miss a dropped forwarding arg; this goes
+    through the HTTP route like traineebox fan-out does.
+    """
+    old_bank = serve.HOLDER.current
+    old_onto = serve.onto()
+    srv = ThreadingHTTPServer(("127.0.0.1", 18301), serve.H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        def post(path, obj):
+            req = urllib.request.Request(
+                "http://127.0.0.1:18301" + path, json.dumps(obj).encode(),
+                {"Content-Type": "application/json"})
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+
+        nb = make_bank("vhttp")
+        onto_payload = {"version": "vhttp-o", "slots": [
+            {"id": "t.addr", "label": "адрес", "aliases": ["адрес"]},
+            {"id": "t.floor", "label": "этаж", "aliases": ["этаж"]},
+        ], "overrides": {}}
+        code, _ = post("/bank/reload", {"version": "vhttp", "digest": nb.digest,
+                                        "slots": nb.slots, "questions": nb.questions,
+                                        "ontology": onto_payload})
+        assert code == 202
+        for _ in range(100):
+            with urllib.request.urlopen("http://127.0.0.1:18301/bank/version") as r:
+                ver = json.loads(r.read())
+            if ver["digest"] == nb.digest:
+                break
+            __import__("time").sleep(0.05)
+        assert ver["digest"] == nb.digest, ver
+        assert serve.onto().version == "vhttp-o"
+        assert set(serve.onto().slots) == {"t.addr", "t.floor"}
+        assert serve.onto().by_alias["адрес"] == "t.addr"
+    finally:
+        srv.shutdown()
+        serve.HOLDER.swap(old_bank)
+        serve.ONTO = old_onto
+
+
+def test_prod_ensemble_uses_session_onto(monkeypatch):
+    """DIALOG_PROD=1: dual voters receive the session's onto (not a stale global)."""
+    import uuid
+    seen: dict = {}
+    old_bank = serve.HOLDER.current
+    old_onto = serve.onto()
+    try:
+        slots2 = {"t.addr": "адрес", "t.floor": "этаж"}
+        questions2 = {
+            "t.addr": ["назовите адрес", "какой адрес происшествия"],
+            "t.floor": ["на каком этаже горит", "какой этаж в огне"],
+        }
+        onto2 = {"version": "vprod", "slots": [
+            {"id": "t.addr", "label": "адрес", "aliases": ["адрес"]},
+            {"id": "t.floor", "label": "этаж", "aliases": ["этаж"]},
+        ], "overrides": {}}
+        bank2 = Bank.build("vprod", slots2, questions2)
+        serve._reload_background("vprod", bank2.digest, slots2, questions2,
+                                 ontology=onto2)
+        assert serve.onto().version == "vprod"
+
+        class FakeLaya:
+            def __init__(self, *a, **k):
+                seen["laya"] = k.get("ontology", a[0] if a else None)
+
+        class FakeLlm:
+            def __init__(self, *a, **k):
+                seen["llm"] = k.get("ontology", a[0] if a else None)
+
+        class FakeImpro:
+            def __init__(self, *a, **k):
+                pass
+
+        def fake_ensemble(cascade, voters, rule="majority"):
+            seen["voters"] = voters
+            return cascade
+
+        monkeypatch.setenv("DIALOG_PROD", "1")
+        monkeypatch.setattr("dialog.core.nlu.laya_arbiter.LayaArbiter", FakeLaya)
+        monkeypatch.setattr("dialog.core.nlu.llm_arbiter.LlmArbiter", FakeLlm)
+        monkeypatch.setattr("dialog.core.dialog.improv.Improviser", FakeImpro)
+        monkeypatch.setattr("dialog.core.nlu.ensemble.Ensemble", fake_ensemble)
+
+        sid = uuid.uuid4().hex
+        serve.open_session(sid, snap_a())
+        e = serve.entry(sid)
+        assert e["onto"] is serve.onto()
+        assert seen["laya"] is e["onto"], seen
+        assert seen["llm"] is e["onto"], seen
+        assert len(seen["voters"]) == 2
+        serve.close(sid)
+    finally:
+        serve.HOLDER.swap(old_bank)
+        serve.ONTO = old_onto

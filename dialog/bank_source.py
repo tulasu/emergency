@@ -10,16 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import sys
 import threading
 from dataclasses import dataclass, field
-
-# Import-time path setup, once: lexical() must not touch sys.path per call.
-_DISPATCHER_PATH = os.environ.get(
-    "DISPATCHER_PATH", "/home/poezd/work/emergency/dispatcher")
-if _DISPATCHER_PATH not in sys.path:
-    sys.path.insert(0, _DISPATCHER_PATH)
 
 
 def digest_of(slots: dict[str, str], questions: dict[str, list[str]]) -> str:
@@ -51,7 +43,7 @@ class Bank:
 
     def lexical(self):
         """LexicalBank over this snapshot (frozen core, no vectors)."""
-        from dispatcher.nlu.bank import LexicalBank
+        from dialog.core.nlu.bank import LexicalBank
 
         sources = {s: ["bank:" + self.version] * len(q)
                    for s, q in self.questions.items()}

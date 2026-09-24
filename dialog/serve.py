@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Composition root: stateless snapshot executor over the frozen ML core.
 
-Frozen core 1:1 (dispatcher/): e5-small-tuned, torch/cuda, GigaAM,
+Frozen core 1:1 (dialog/core, vendored): e5-small-tuned, torch/cuda, GigaAM,
 majority-ensemble, IMPROV=1 grounded, dual voters (laya 0.5 + LLM),
 Qwen3-4B, voter/improv 3s, k=5, tuned cascade thresholds. This file never
 reimplements understanding/policy/render — it only owns sessions, locks,
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import threading
 import time
 import urllib.request
@@ -24,17 +23,11 @@ import uuid as _uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-_SYS_DISPATCHER = os.environ.get("DISPATCHER_PATH", "/home/poezd/work/emergency/dispatcher")
-if _SYS_DISPATCHER not in sys.path:
-    sys.path.insert(0, _SYS_DISPATCHER)
-
-from dispatcher.data.ontology import Ontology  # noqa: E402  (frozen kinds/labels)
-from dispatcher.dialog.render import Renderer  # noqa: E402
-from dispatcher.dialog.state import CallState  # noqa: E402
-from dispatcher.nlu.bank import LexicalBank  # noqa: E402
-from dispatcher.nlu.cascade import Cascade  # noqa: E402
-from dispatcher.session import Session  # noqa: E402
-from dispatcher.types import Disclosure, Fact, Profile, Scenario  # noqa: E402
+from dialog.core.data.ontology import Ontology  # frozen kinds/labels
+from dialog.core.nlu.bank import LexicalBank
+from dialog.core.nlu.cascade import Cascade
+from dialog.core.session import Session
+from dialog.core.types import Disclosure, Fact, Profile, Scenario, Slot, SlotKind
 
 from .bank_source import Bank, BankHolder  # noqa: E402
 from .validator import SnapshotError, validate_snapshot  # noqa: E402
@@ -62,16 +55,84 @@ class BusyError(RuntimeError):
 HOLDER = BankHolder()
 SESSIONS: dict[str, dict] = {}
 GUARD = threading.Lock()
-ONTO = None
+# Bank+ontology swap together under one guard so open_session never sees
+# a new bank with an old ontology (one version — one swap).
+_SWAP_GUARD = threading.Lock()
+ONTO = Ontology(version="empty", slots={}, by_alias={}, overrides={})
 _LEXICAL_CACHE: dict[str, LexicalBank] = {}
 _LEXICAL_GUARD = threading.Lock()
 
 
-def onto():
-    global ONTO
-    if ONTO is None:
-        ONTO = Ontology.load()
+def onto() -> Ontology:
+    """Current ontology snapshot. Empty until the first /bank/reload."""
     return ONTO
+
+
+def ontology_from_snapshot(raw: dict | None) -> Ontology:
+    """Build Ontology from the /bank/reload payload fragment.
+
+    Only `id`+`label` required per slot; rest = Slot defaults; `by_alias`
+    rebuilt from `aliases` verbatim like `Ontology.load`. Raises ValueError
+    on bad slot/kind so the reload keeps the old bank+ontology."""
+    if not isinstance(raw, dict):
+        raise ValueError("ontology must be an object")
+    items = raw.get("slots", [])
+    if not isinstance(items, list):
+        raise ValueError("ontology.slots must be a list")
+    if not items:
+        raise ValueError("ontology.slots must be a non-empty list")
+    slots: dict[str, Slot] = {}
+    by_alias: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("ontology slot must be an object")
+        sid = item.get("id", "")
+        label = item.get("label", "")
+        if not isinstance(sid, str) or not sid or "." not in sid:
+            raise ValueError(f"bad slot id {sid!r}")
+        if sid in slots:
+            raise ValueError(f"slot {sid} declared twice")
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"slot {sid} needs a label")
+        try:
+            kind = SlotKind(item.get("kind", "value"))
+        except ValueError:
+            raise ValueError(f"slot {sid}: bad kind {item.get('kind')!r}") from None
+        try:
+            disclosure = Disclosure(item.get("disclosure", "volunteered"))
+        except ValueError:
+            raise ValueError(f"slot {sid}: bad disclosure") from None
+        aliases_raw = item.get("aliases", ())
+        if isinstance(aliases_raw, str) or not isinstance(aliases_raw, (list, tuple)):
+            raise ValueError(f"slot {sid}: aliases must be a list")
+        aliases = tuple(aliases_raw)
+        for a in aliases:
+            if not isinstance(a, str) or not a:
+                raise ValueError(f"slot {sid}: bad alias {a!r}")
+            if a in by_alias:
+                raise ValueError(f"alias {a!r} taken by {by_alias[a]}, repeat in {sid}")
+            by_alias[a] = sid
+        urge = item.get("urge", "")
+        if not isinstance(urge, str):
+            raise ValueError(f"slot {sid}: urge must be a string")
+        slots[sid] = Slot(
+            id=sid, label=label, kind=kind, aliases=aliases,
+            fallback=tuple(item.get("fallback", ())),
+            questions=tuple(item.get("questions", ())),
+            urge=urge, default_disclosure=disclosure,
+            since=str(item.get("since", "0.1")),
+        )
+    for sid, slot in slots.items():
+        for other in slot.fallback:
+            if other not in slots:
+                raise ValueError(f"{sid}: fallback to unknown slot {other}")
+    overrides = dict(raw.get("overrides") or {})
+    for ref, target in overrides.items():
+        if target not in slots:
+            raise ValueError(f"override {ref} to unknown slot {target}")
+        if ":" not in ref:
+            raise ValueError(f"override must look like scenario:key, not {ref}")
+    return Ontology(str(raw.get("version", "0.1")), slots, by_alias, overrides)
 
 
 def scenario_from_snapshot(norm: dict) -> Scenario:
@@ -111,25 +172,29 @@ def open_session(session_id: str, snapshot: dict, bank: Bank | None = None,
         sid = norm_sid(session_id)
     except ValueError:
         raise SnapshotError("session_id must be UUID (call_id)")
-    bank = bank or HOLDER.current
+    with _SWAP_GUARD:
+        if bank is None:
+            bank = HOLDER.current  # locked: bank+onto swap together
+        onto_used = ONTO
     if expected_digest and expected_digest != bank.digest:
         raise SnapshotError("bank digest mismatch: call is on a stale bank")
     norm = validate_snapshot(snapshot, bank.slot_ids)
     lexical = _lexical_for(bank)
     sc = scenario_from_snapshot(norm)
-    cascade = Cascade(scenario=sc, lexical=lexical, ontology=onto(), thin_rescue=False)
+    cascade = Cascade(scenario=sc, lexical=lexical, ontology=onto_used, thin_rescue=False)
     impro = None
     if os.environ.get("DIALOG_PROD") == "1":
         impro = _frozen_improviser()
-        cascade = _frozen_ensemble(sc, lexical, cascade)
-    sess = Session.open(sc, cascade, onto())
+        cascade = _frozen_ensemble(sc, lexical, cascade, onto_used)
+    sess = Session.open(sc, cascade, onto_used)
     sess.improv = impro
     with GUARD:
         if len(SESSIONS) >= MAX_SESSIONS:
             raise BusyError(f"too many sessions (cap {MAX_SESSIONS})")
         if sid in SESSIONS:
             raise KeyError(f"session {sid} exists")
-        SESSIONS[sid] = {"session": sess, "lock": threading.Lock(), "bank": bank}
+        SESSIONS[sid] = {"session": sess, "lock": threading.Lock(),
+                         "bank": bank, "onto": onto_used}
     return sess.opening()
 
 
@@ -143,7 +208,10 @@ def _lexical_for(bank: Bank) -> LexicalBank:
         sources = {s: ["bank:" + bank.version] * len(q) for s, q in bank.questions.items()}
         built = LexicalBank.build(bank.questions, sources)
     else:
-        built = LexicalBank.build(_bootstrap_questions(), {"__boot__": []})
+        # Empty bank (before first reload): empty lexical, no file seed.
+        # Open then fails at validate_snapshot (unknown slot → 400); lint
+        # raises the same way (validate first, like open).
+        built = LexicalBank.build({}, {})
     with _LEXICAL_GUARD:
         _LEXICAL_CACHE[bank.digest] = built
         while len(_LEXICAL_CACHE) > 4:  # ponytail: keep current + few old for in-flight
@@ -151,25 +219,19 @@ def _lexical_for(bank: Bank) -> LexicalBank:
     return built
 
 
-def _bootstrap_questions() -> dict:
-    """Lexical bootstrap from frozen corpus files (bank seed before first reload)."""
-    from dispatcher.data.loader import load_all
-    return load_all(onto()).questions
-
-
 def _frozen_improviser():
     """IMPROV=1 grounded (Qwen3-4B, 3s). Only in DIALOG_PROD=1 (needs llama-server)."""
-    from dispatcher.dialog.improv import Improviser
+    from dialog.core.dialog.improv import Improviser
     return Improviser(timeout=3.0)
 
 
-def _frozen_ensemble(sc, lexical, cascade):
+def _frozen_ensemble(sc, lexical, cascade, onto_used):
     """Dual voters (laya 0.5 + LLM) majority-ensemble, k=5, voter 3s. Prod only."""
-    from dispatcher.nlu.ensemble import Ensemble
-    from dispatcher.nlu.laya_arbiter import LayaArbiter
-    from dispatcher.nlu.llm_arbiter import LlmArbiter
-    voters = [LayaArbiter(ontology=onto(), device="cuda", min_confidence=0.5),
-              LlmArbiter(onto())]
+    from dialog.core.nlu.ensemble import Ensemble
+    from dialog.core.nlu.laya_arbiter import LayaArbiter
+    from dialog.core.nlu.llm_arbiter import LlmArbiter
+    voters = [LayaArbiter(ontology=onto_used, device="cuda", min_confidence=0.5),
+              LlmArbiter(onto_used)]
     return Ensemble(cascade, voters, rule="majority")
 
 
@@ -228,17 +290,16 @@ def _push_turns(session_id: str, turns: list[dict]) -> None:
 
 
 def lint_scenario(snapshot: dict) -> dict:
-    bank = HOLDER.current
+    with _SWAP_GUARD:
+        bank = HOLDER.current  # locked: bank+onto swap together
+        onto_used = ONTO
     norm = validate_snapshot(snapshot, bank.slot_ids)
-    from dispatcher.data.authoring import lint
+    from dialog.core.data.authoring import lint
     sources = {s: ["bank:" + bank.version] * len(q) for s, q in bank.questions.items()}
-    lexical = LexicalBank.build(bank.questions, sources) if bank.questions else None
-    if lexical is None:
-        from dispatcher.data.loader import load_all
-        loaded = load_all(onto())
-        lexical = LexicalBank.build(loaded.questions, loaded.sources)
+    lexical = (LexicalBank.build(bank.questions, sources) if bank.questions
+               else LexicalBank.build({}, {}))  # empty bank: validate raises first, like open
     sc = scenario_from_snapshot(norm)
-    report = lint(sc, lexical, onto())
+    report = lint(sc, lexical, onto_used)
     unreachable = [h.key for h in report if h.key in sc.critical and h.reachable < 0.5]
     return {"id": sc.id, "facts": len(sc.facts), "critical": list(sc.critical),
             "unreachable": unreachable}
@@ -322,7 +383,8 @@ class H(BaseHTTPRequestHandler):
             # Fan-out carries the snapshot; no fetch round-trip (spec J).
             threading.Thread(target=_reload_background,
                              args=(b.get("version", ""), b.get("digest", ""),
-                                   b.get("slots", {}), b.get("questions", {})),
+                                   b.get("slots", {}), b.get("questions", {}),
+                                   b.get("ontology")),
                              daemon=True).start()
             self._send({"ok": True}, 202)
         else:
@@ -330,8 +392,14 @@ class H(BaseHTTPRequestHandler):
 
 
 def _reload_background(version: str, digest: str = "",
-                        slots: dict | None = None, questions: dict | None = None) -> None:
-    """Background rebuild + atomic swap; in-flight calls finish on old (AD-8)."""
+                       slots: dict | None = None, questions: dict | None = None,
+                       ontology: dict | None = None) -> None:
+    """Background rebuild + atomic swap; in-flight calls finish on old (AD-8).
+
+    Bank+ontology swap together under one guard; a bad ontology payload
+    keeps the old pair and counts a failure. Absent ontology keeps current
+    (old traineebox compat)."""
+    global ONTO
     try:
         if slots:
             bank = Bank.build(version or "v1", slots, questions or {})
@@ -340,39 +408,40 @@ def _reload_background(version: str, digest: str = "",
         else:
             fetched_slots, fetched_questions = _fetch_bank(version)
             bank = Bank.build(version or "v1", fetched_slots, fetched_questions)
-        HOLDER.swap(bank)
+        new_onto = ontology_from_snapshot(ontology) if ontology is not None else None
+        with _SWAP_GUARD:
+            HOLDER.swap(bank)
+            if new_onto is not None:
+                ONTO = new_onto
     except Exception as exc:  # noqa: BLE001
         print(f"[dialog] bank reload failed: {exc}", flush=True)
         HOLDER.mark_failure()
 
 
 def _fetch_bank(version: str) -> tuple[dict, dict]:
-    """Pull canon from traineebox when configured, else reseed from frozen files."""
+    """Pull canon from traineebox. No local seed: empty until /bank/reload."""
     url = os.environ.get("TRAINEEBOX_BANK_URL", "")
-    if url:
-        req = urllib.request.Request(url, headers={"X-Service-Token": SERVICE_TOKEN})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            raw = json.loads(r.read())
-        return raw["slots"], raw["questions"]
-    from dispatcher.data.loader import load_all
-    loaded = load_all(onto())
-    labels = {sid: onto().slots[sid].label for sid in loaded.questions if sid in onto().slots}
-    return labels, dict(loaded.questions)
+    if not url:
+        raise RuntimeError("TRAINEEBOX_BANK_URL not set: empty bank until /bank/reload")
+    req = urllib.request.Request(url, headers={"X-Service-Token": SERVICE_TOKEN})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        raw = json.loads(r.read())
+    return raw["slots"], raw["questions"]
 
 
 def audiosocket_listener(host: str = "127.0.0.1", port: int = 9001) -> None:
     """AudioSocket routing by first-frame UUID (call_id). No session → close (AD-6)."""
     import socket as _socket
 
-    from dispatcher.media.asterisk import (
+    from dialog.core.media.asterisk import (
         _KIND_AUDIO, _KIND_ERROR, _KIND_HANGUP, _KIND_UUID, Call, MediaConfig,
         pack_audio, unpack,
     )
-    from dispatcher.media.gigaam_stt import GigaAMSTT
+    from dialog.core.media.gigaam_stt import GigaAMSTT
 
     tts = None
     if os.environ.get("DIALOG_PROD") == "1":
-        from dispatcher.media.silero_tts import SileroTTS
+        from dialog.core.media.silero_tts import SileroTTS
         tts = SileroTTS(device="cuda")
     srv = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
     srv.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)

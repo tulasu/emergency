@@ -12,6 +12,8 @@ const (
 	JobStatusTaggingType      JobStatus = "tagging_type"
 	JobStatusTaggingCommon    JobStatus = "tagging_common"
 	JobStatusBuildingServices JobStatus = "building_services"
+	JobStatusBuildingDialog   JobStatus = "building_dialog"
+	JobStatusCheckingDialog   JobStatus = "checking_dialog"
 	JobStatusBuildingRef      JobStatus = "building_ref" // legacy mid-pipeline
 	JobStatusReady            JobStatus = "ready"
 	JobStatusFailed           JobStatus = "failed"
@@ -23,7 +25,8 @@ func ParseJobStatus(s string) (JobStatus, error) {
 	switch JobStatus(s) {
 	case JobStatusQueued, JobStatusEnriching, JobStatusFillingPII,
 		JobStatusPickingType, JobStatusTaggingType, JobStatusTaggingCommon,
-		JobStatusBuildingServices, JobStatusBuildingRef,
+		JobStatusBuildingServices, JobStatusBuildingDialog, JobStatusCheckingDialog,
+		JobStatusBuildingRef,
 		JobStatusReady, JobStatusFailed, JobStatusCancelled, JobStatusPublished:
 		return JobStatus(s), nil
 	default:
@@ -49,7 +52,7 @@ func (s JobStatus) IsInProgress() bool {
 	switch s {
 	case JobStatusEnriching, JobStatusFillingPII, JobStatusPickingType,
 		JobStatusTaggingType, JobStatusTaggingCommon, JobStatusBuildingServices,
-		JobStatusBuildingRef:
+		JobStatusBuildingDialog, JobStatusCheckingDialog, JobStatusBuildingRef:
 		return true
 	default:
 		return false

@@ -117,6 +117,14 @@ SERVICES_SYSTEM = (
 
 
 class Pipeline:
+    """Pure function: prompt -> draft (no DB, no queue, no dialog link).
+
+    Traineebox owns the job rows (building_dialog/checking_dialog) and calls
+    run() per stage; dialog snapshots are authored by teachers via
+    PUT /tickets/{id}/scenario — ticketgen output feeds briefing/reference
+    only, never dialog facts directly.
+    """
+
     def __init__(self, catalog: Catalog, llm: LLM | None = None, locale: str = "ru_RU"):
         self.catalog = catalog
         self.llm = llm or LLMClient()
@@ -162,6 +170,26 @@ class Pipeline:
             scenario_text=state.scenario,
             draft_reference=ref,
         )
+
+    def draft_scenario(self, prompt: str) -> PipelineResult:
+        """Pure draft: prompt -> title/scenario/reference (no side effects)."""
+        return self.run(prompt)
+
+    def dialog_report(self, result: PipelineResult) -> dict[str, Any]:
+        """Report traineebox stores on the job before approve.
+
+        building_dialog: briefing payload; checking_dialog: lint/PII gate input.
+        Slot-fact authoring stays teacher-side (PUT /scenario).
+        """
+        ref = dict(result.draft_reference)
+        return {
+            "draft_title": result.draft_title,
+            "scenario_text": result.scenario_text,
+            "draft_reference": ref,
+            "stages": ["building_dialog", "checking_dialog"],
+            "pii_keys": [k for k in ("applicant_last_name", "applicant_first_name",
+                                        "caller_number", "dictated_number") if ref.get(k)],
+        }
 
     def generate_scenario(self, prompt: str) -> tuple[str, str]:
         user = f"Описание преподавателя: {prompt}"

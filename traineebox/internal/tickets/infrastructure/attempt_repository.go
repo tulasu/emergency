@@ -176,6 +176,16 @@ func (r *AttemptRepository) Save(ctx context.Context, attempt models.Attempt) er
 	return tx.Commit(ctx)
 }
 
+// MarkTimedOut closes an in_progress attempt without loading it first: the
+// single UPDATE is conditional on status still in_progress, so a concurrent
+// submit can never be clobbered by the deadline ticker (spec Q).
+func (r *AttemptRepository) MarkTimedOut(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE ticket_attempts SET status = 'timed_out', finished_at = now()
+		 WHERE id = $1 AND status = 'in_progress'`, id)
+	return err
+}
+
 func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.TicketAttempt) (models.Attempt, error) {
 	ans, err := r.q.GetAttemptAnswer(ctx, row.ID)
 	if err != nil {

@@ -18,6 +18,9 @@ type ApproveJob struct {
 	Membership repositories.GroupMembership
 	Tickets    ticketsrepos.TicketRepository
 	Catalog    ticketsrepos.CatalogRepository
+	// Atomically publishes ticket+reference+job in one txn when set.
+	// Nil keeps the legacy two-step path (tests/fakes).
+	AtomicPublish func(ctx context.Context, ticket ticketsmodels.Ticket, ref ticketsmodels.ReferenceAnswer, jobID uuid.UUID, expectedStatus string, expectedVersion int) error
 }
 
 type ApproveJobInput struct {
@@ -55,6 +58,14 @@ func (uc ApproveJob) Execute(ctx context.Context, in ApproveJobInput) (models.Jo
 	if err != nil {
 		return models.Job{}, mapTicketsErr(err)
 	}
+	// Dialog snapshot travels with the ticket; mode defaults to voice (AD-9).
+	// Generated tickets carry no teacher snapshot yet: '{}' keeps the jsonb
+	// cast valid until PUT /scenario authors the real one (spec C).
+	ticket.Mode = "voice"
+	ticket.Briefing = job.ScenarioText
+	if ticket.ScenarioJSON == "" {
+		ticket.ScenarioJSON = "{}"
+	}
 	ref, err := ticketsmodels.NewReferenceAnswer(
 		ticket.ID, draft.IncidentTypeCode, draft.TagCodes, draft.ServiceCodes,
 		draft.ApplicantLastName, draft.ApplicantFirstName, draft.CallerNumber, draft.DictatedNumber,
@@ -73,6 +84,16 @@ func (uc ApproveJob) Execute(ctx context.Context, in ApproveJobInput) (models.Jo
 		if !ok {
 			return models.Job{}, errs.ErrInvalidInput
 		}
+	}
+	if uc.AtomicPublish != nil {
+		if err := uc.AtomicPublish(ctx, ticket, ref, job.ID, expectedStatus, expectedVersion); err != nil {
+			return models.Job{}, err
+		}
+		if err := job.MarkPublished(ticket.ID); err != nil {
+			return models.Job{}, err
+		}
+		job.Version = expectedVersion + 1
+		return job, nil
 	}
 	if err := uc.Tickets.CreateWithReference(ctx, ticket, ref); err != nil {
 		return models.Job{}, err

@@ -21,12 +21,14 @@ import (
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
 	ticketsapp "traineebox/internal/tickets/application"
+	ticketsmodels "traineebox/internal/tickets/domain/models"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 	ticketspresentation "traineebox/internal/tickets/presentation"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 var version = "dev"
@@ -102,15 +104,18 @@ func main() {
 
 	jobsRepo := geninfra.NewJobRepository(pool)
 	genHandlers := genpresentation.NewAPI(genpresentation.Deps{
-		CreateJob:  genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
-		ListJobs:   genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
-		GetJob:     genapp.GetJob{Jobs: jobsRepo, Membership: membership},
-		PatchJob:   genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
-		RetryJob:   genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
-		CancelJob:  genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
-		DeleteJob:  genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
+		CreateJob: genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
+		ListJobs:  genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
+		GetJob:    genapp.GetJob{Jobs: jobsRepo, Membership: membership},
+		PatchJob:  genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
+		RetryJob:  genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
+		CancelJob: genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
+		DeleteJob: genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
 		ApproveJob: genapp.ApproveJob{
 			Jobs: jobsRepo, Membership: membership, Tickets: ticketsRepo, Catalog: catalogRepo,
+			AtomicPublish: func(ctx context.Context, ticket ticketsmodels.Ticket, ref ticketsmodels.ReferenceAnswer, jobID uuid.UUID, expectedStatus string, expectedVersion int) error {
+				return geninfra.ApproveAtomically(ctx, pool, ticket, ref, jobID, expectedStatus, expectedVersion)
+			},
 		},
 		Authenticate: generationSessionAuthenticator{auth: authenticate},
 	})
@@ -129,6 +134,7 @@ func main() {
 	groupspresentation.Register(api, groupsHandlers)
 	ticketspresentation.Register(api, ticketsHandlers)
 	genpresentation.Register(api, genHandlers)
+	wireCallsAndDialog(api, pool, authenticate, ticketsRepo, attemptsRepo, jobsRepo, catalogRepo)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

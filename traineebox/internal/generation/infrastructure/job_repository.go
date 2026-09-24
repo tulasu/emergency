@@ -16,11 +16,59 @@ import (
 )
 
 type JobRepository struct {
-	q *generationsql.Queries
+	q    *generationsql.Queries
+	pool *pgxpool.Pool
 }
 
 func NewJobRepository(pool *pgxpool.Pool) *JobRepository {
-	return &JobRepository{q: generationsql.New(pool)}
+	return &JobRepository{q: generationsql.New(pool), pool: pool}
+}
+
+// ClaimNext atomically claims one queued (or lease-expired in-progress) job
+// for building_dialog/checking_dialog driving. SKIP LOCKED lets N workers
+// share the queue. Nothing else drives these statuses (spec K).
+func (r *JobRepository) ClaimNext(ctx context.Context, workerID string, leaseSeconds int) (models.Job, bool, error) {
+	if leaseSeconds <= 0 {
+		leaseSeconds = 120
+	}
+	var row generationsql.TicketGenerationJob
+	// pgx maps the row via the generated scanner: reuse GetGenerationJobByID shape.
+	err := r.pool.QueryRow(ctx,
+		`UPDATE ticket_generation_jobs AS j SET
+			status = 'building_dialog',
+			version = j.version + 1,
+			claimed_by = $1,
+			claimed_at = now(),
+			lease_until = now() + make_interval(secs => $2),
+			updated_at = now(),
+			attempts = j.attempts + 1,
+			error_message = ''
+		WHERE j.id = (
+			SELECT id FROM ticket_generation_jobs
+			WHERE status = 'queued' OR (status IN (
+				'enriching','filling_pii','picking_type','tagging_type','tagging_common',
+				'building_services','building_dialog','checking_dialog','building_ref')
+				AND lease_until IS NOT NULL AND lease_until < now())
+			ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+		RETURNING id, group_id, created_by, prompt, status, version, scenario_text,
+			draft_title, draft_reference, error_message, attempts, published_ticket_id,
+			claimed_by, claimed_at, lease_until, created_at, updated_at`,
+		workerID, leaseSeconds).Scan(
+		&row.ID, &row.GroupID, &row.CreatedBy, &row.Prompt, &row.Status, &row.Version,
+		&row.ScenarioText, &row.DraftTitle, &row.DraftReference, &row.ErrorMessage,
+		&row.Attempts, &row.PublishedTicketID, &row.ClaimedBy, &row.ClaimedAt,
+		&row.LeaseUntil, &row.CreatedAt, &row.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Job{}, false, nil
+		}
+		return models.Job{}, false, err
+	}
+	job, err := mapJob(row)
+	if err != nil {
+		return models.Job{}, false, err
+	}
+	return job, true, nil
 }
 
 func (r *JobRepository) Create(ctx context.Context, job models.Job) error {

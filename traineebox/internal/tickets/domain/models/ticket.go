@@ -20,6 +20,13 @@ type Ticket struct {
 	DurationSeconds *int
 	CreatedBy       uuid.UUID
 	CreatedAt       time.Time
+	// Dialog snapshot owned by traineebox (AD-7). Empty = legacy ticket.
+	ScenarioJSON    string
+	ScenarioVersion string
+	Mode            string
+	Briefing        string
+	// Reference is the tickets.reference JSONB canon (row_to_json overlay).
+	Reference string
 }
 
 func NewTicket(

@@ -149,3 +149,47 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+  - engine: "postgresql"
+    queries: "internal/calls/infrastructure/sql/queries.sql"
+    schema: "internal/calls/infrastructure/sql/schema.sql"
+    gen:
+      go:
+        package: "callssql"
+        out: "internal/calls/infrastructure/callssql"
+        sql_package: "pgx/v5"
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+  - engine: "postgresql"
+    queries: "internal/dialog/infrastructure/sql/queries.sql"
+    schema: "internal/dialog/infrastructure/sql/schema.sql"
+    gen:
+      go:
+        package: "dialogsql"
+        out: "internal/dialog/infrastructure/dialogsql"
+        sql_package: "pgx/v5"
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"

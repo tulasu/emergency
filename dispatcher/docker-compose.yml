@@ -54,7 +54,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gpu
-    network_mode: host # один стек с orchestrator/asterisk, проще DNS
+    network_mode: host # один стек с traineebox/asterisk, проще DNS
     environment:
       HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
       DISPATCHER_MODELS: /app/models
@@ -87,15 +87,58 @@ services:
         reservations:
           devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
 
-  orchestrator:
-    build: ./orchestrator
-    network_mode: host # ARI на 127.0.0.1:8088 (asterisk — host network)
+
+  # Owner-executor stack (traineebox owns, dialog/ticketgen execute).
+  # URL linkage over host network: ARI (asterisk) <- traineebox ->
+  # dialog (voice) + ticketgen (drafts). asterisk boots first.
+  dialog:
+    build:
+      context: ..
+      dockerfile: dialog/Dockerfile
+    network_mode: host # AudioSocket :9001 + HTTP :8000 next to asterisk
     environment:
-      ARI_URL: http://127.0.0.1:8088/ari
-      PY_URL: http://127.0.0.1:8000
-      RTP_BASE: "10000"
+      DIALOG_PORT: ${DIALOG_PORT:-8000}
+      TRAINEEBOX_URL: http://127.0.0.1:8080
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+    volumes:
+      - ./data/ontology:/app/data/ontology:ro
+      - dialog-wav:/tmp/dialog-wav # wav stays on dialog volume (no upload)
     depends_on:
       - asterisk
-      - python
-    deploy:
-      replicas: 1 # host network не дружит с replicas>1, HPA через K8s/HostPort
+
+  ticketgen:
+    build:
+      context: ..
+      dockerfile: ticketgen/Dockerfile
+    network_mode: host # pure function over HTTP POST /draft, no DB
+    environment:
+      TICKETGEN_PORT: ${TICKETGEN_PORT:-8001}
+      TICKETGEN_CATALOG_PATH: /catalog
+      DIALOG_URL: http://127.0.0.1:8000
+    volumes:
+      - ../artifacts/etc/traineebox/catalog:/catalog:ro
+    depends_on:
+      - asterisk
+
+  traineebox:
+    build:
+      context: ..
+      dockerfile: traineebox/Dockerfile
+    network_mode: host # single stack with asterisk/dialog, plain DNS
+    environment:
+      TRAINEEBOX_HTTP_ADDR: ${TRAINEEBOX_HTTP_ADDR:-:8080}
+      TRAINEEBOX_POSTGRES_DSN: ${TRAINEEBOX_POSTGRES_DSN:-}
+      TRAINEEBOX_CATALOG_PATH: /catalog
+      ARI_URL: http://127.0.0.1:8088/ari
+      DIALOG_URL: http://127.0.0.1:8000
+      TICKETGEN_URL: http://127.0.0.1:8001
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+    volumes:
+      - ../artifacts/etc/traineebox/catalog:/catalog:ro
+    depends_on:
+      - asterisk
+      - dialog
+      - ticketgen
+
+volumes:
+  dialog-wav:

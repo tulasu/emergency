@@ -1,14 +1,15 @@
 import { Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { errorCodeMessage } from '../../../core/api/api-error';
+import { ruCount } from '../../../core/users/ru-count';
 import { ProvisionResultStore } from '../../../core/users/provision-result.store';
+import { exportAccessesCsv } from '../../../core/users/users-file';
 import { TbButton } from '../../../shared/ui/button/button';
-import { TbCard } from '../../../shared/ui/card/card';
 import { TbIcon } from '../../../shared/ui/icon/icon';
 
 @Component({
   selector: 'tb-credentials-page',
-  imports: [TbButton, TbCard, TbIcon],
+  imports: [TbButton, TbIcon],
   templateUrl: './credentials-page.html',
   styleUrl: './credentials-page.css',
 })
@@ -17,6 +18,7 @@ export class CredentialsPage {
   private readonly router = inject(Router);
 
   readonly result = this.results.result;
+  readonly groupName = this.results.groupName;
   readonly created = computed(() => this.result()?.created ?? []);
   readonly failed = computed(() => this.result()?.failed ?? []);
 
@@ -24,6 +26,13 @@ export class CredentialsPage {
     if (!this.result()) {
       void this.router.navigateByUrl('/users/new', { replaceUrl: true });
     }
+  }
+
+  subtitle(): string {
+    const count = ruCount(this.created().length, 'пользователь', 'пользователя', 'пользователей');
+    const group = this.groupName();
+    const groupPart = group ? ` · группа ${group}` : '';
+    return `${count}${groupPart}. Пароли больше не покажем — скопируйте или скачайте сейчас.`;
   }
 
   failMessage(code: string): string {
@@ -36,7 +45,7 @@ export class CredentialsPage {
 
   async copyAll(): Promise<void> {
     const text = this.created()
-      .map((u) => `${u.full_name}\t${u.login}\t${u.password}`)
+      .map((user) => `${user.full_name}\t${user.login}\t${user.password}`)
       .join('\n');
     await navigator.clipboard.writeText(text);
   }
@@ -44,9 +53,7 @@ export class CredentialsPage {
   download(kind: 'csv' | 'txt'): void {
     const rows = this.created();
     const body =
-      kind === 'csv'
-        ? ['ФИО,Логин,Пароль', ...rows.map((u) => `${escapeCsv(u.full_name)},${u.login},${u.password}`)].join('\n')
-        : rows.map((u) => `${u.full_name}\t${u.login}\t${u.password}`).join('\n');
+      kind === 'csv' ? exportAccessesCsv(rows) : rows.map((user) => `${user.full_name}\t${user.login}\t${user.password}`).join('\n');
     const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -55,11 +62,4 @@ export class CredentialsPage {
     a.click();
     URL.revokeObjectURL(url);
   }
-}
-
-function escapeCsv(value: string): string {
-  if (!/[",\n]/.test(value)) {
-    return value;
-  }
-  return `"${value.replaceAll('"', '""')}"`;
 }

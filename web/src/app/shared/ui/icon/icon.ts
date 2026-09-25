@@ -12,7 +12,9 @@ export type TbIconName =
   | 'user'
   | 'copy'
   | 'chevron-down'
-  | 'check';
+  | 'check'
+  | 'x'
+  | 'file';
 
 @Component({
   selector: 'tb-icon',
@@ -57,6 +59,15 @@ export type TbIconName =
       }
       @case ('check') {
         <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
+      }
+      @case ('x') {
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      }
+      @case ('file') {
+        <svg viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+        </svg>
       }
     }
   `,

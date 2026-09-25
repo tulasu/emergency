@@ -6,18 +6,23 @@
       </button>
       <span class="sidebar__divider"></span>
     }
-    <a class="nav" routerLink="/users/new" routerLinkActive="nav--active" aria-label="Новые пользователи">
+    <button class="nav" type="button" disabled aria-label="Создать">
       <tb-icon name="plus" />
-    </a>
+    </button>
     <button class="nav" type="button" disabled aria-label="Карточки">
       <tb-icon name="layers" />
     </button>
     <button class="nav" type="button" disabled aria-label="Уроки">
       <tb-icon name="folder" />
     </button>
-    <button class="nav" type="button" disabled aria-label="Группы">
+    <a
+      class="nav"
+      routerLink="/users/new"
+      [class.nav--active]="usersActive()"
+      aria-label="Группы"
+    >
       <tb-icon name="users" />
-    </button>
+    </a>
   </nav>
   <div class="sidebar__account" (click)="$event.stopPropagation()">
     <div class="sidebar__menu" [class.sidebar__menu--open]="profileOpen()" [attr.inert]="profileOpen() ? null : ''">

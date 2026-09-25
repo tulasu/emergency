@@ -8,11 +8,12 @@ export const usersRoutes: Routes = [
     loadComponent: () => import('./create-manual-page/create-manual-page').then((m) => m.CreateManualPage),
   },
   {
-    path: 'new/batch',
-    loadComponent: () => import('./create-batch-page/create-batch-page').then((m) => m.CreateBatchPage),
+    path: 'new/import',
+    loadComponent: () => import('./import-users-page/import-users-page').then((m) => m.ImportUsersPage),
   },
+  { path: 'new/batch', redirectTo: 'new/import', pathMatch: 'full' as const },
   {
     path: 'credentials',
     loadComponent: () => import('./credentials-page/credentials-page').then((m) => m.CredentialsPage),
   },
-].map((route) => ({ ...route, canActivate: [staffGuard] }));
+].map((route) => (route.redirectTo ? route : { ...route, canActivate: [staffGuard] }));

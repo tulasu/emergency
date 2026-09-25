@@ -1,22 +1,23 @@
 <section class="page">
-  <header class="page__header">
-    <h1 class="page-title">Один пользователь</h1>
-    <p class="page-sub">Пароль сгенерируем и покажем на экране доступов.</p>
-  </header>
-  <form class="form" [formGroup]="form" (ngSubmit)="submit()">
-    <tb-field label="ФИО">
-      <tb-input formControlName="full_name" />
-    </tb-field>
-    <tb-field label="Логин">
-      <tb-input formControlName="login" />
-    </tb-field>
-    <tb-field label="Группа">
-      <tb-select formControlName="group_id" placeholder="Выберите группу" [options]="groupOptions()" />
-    </tb-field>
-    <label tbCheckRow label="Сгенерировать пароль" [(checked)]="generate"></label>
-    @if (error()) {
-      <p class="form__error">{{ error() }}</p>
-    }
-    <button tbButton variant="secondary" type="submit" [disabled]="pending()">Создать пользователя</button>
+  <form class="sheet" [formGroup]="form" (ngSubmit)="submit()">
+    <header class="sheet__header">
+      <div class="sheet__titles">
+        <h1 class="page-title">Новые учётные записи</h1>
+        <p class="page-sub">Учётные записи попадут в выбранную группу.</p>
+      </div>
+      <div class="sheet__actions">
+        <tb-field class="sheet__group" label="Группа">
+          <tb-select [formControl]="form.controls.group_id" placeholder="Выберите группу" [options]="groupOptions()" />
+        </tb-field>
+      </div>
+    </header>
+    <tb-users-table [users]="users" (add)="addRow()" (remove)="removeRow($event)" />
+    <footer class="foot">
+      <p>{{ countLabel() }}</p>
+      @if (error()) {
+        <p class="foot__error">{{ error() }}</p>
+      }
+      <button tbButton type="submit" [disabled]="pending()">Создать учётные записи</button>
+    </footer>
   </form>
 </section>

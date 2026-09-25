@@ -1,22 +1,42 @@
 <section class="page">
-  <header class="page__header">
-    <h1 class="page-title">Новые пользователи</h1>
-    <p class="page-sub">Выберите, как добавить людей. Пароли можно сгенерировать — задавать их вручную не нужно.</p>
-  </header>
-  <div class="choices">
-    <a tbCard class="choice" routerLink="/users/new/manual">
-      <span class="choice__icon">
-        <tb-icon name="user-plus" />
-      </span>
-      <h2>Вручную</h2>
-      <p>Один человек: ФИО, логин, группа. Пароль сгенерируем сами.</p>
-    </a>
-    <a tbCard class="choice" routerLink="/users/new/batch">
-      <span class="choice__icon">
-        <tb-icon name="users" />
-      </span>
-      <h2>Пакет</h2>
-      <p>Несколько человек списком. Строки добавляются плюсом, пароли — пачкой.</p>
-    </a>
+  <div class="sheet">
+    <header class="sheet__header">
+      <h1 class="page-title">Новые пользователи</h1>
+      <p class="page-sub">Выберите, как создать новые учётные записи</p>
+    </header>
+    <div class="sheet__rule"></div>
+    <div class="choices">
+      <a class="choice" routerLink="/users/new/manual">
+        <span class="choice__icon">
+          <tb-icon name="user-plus" />
+        </span>
+        <h2>Вручную</h2>
+        <p>Создать одного или несколько пользователей.</p>
+      </a>
+      <div class="choice">
+        <button class="choice__link" type="button" (click)="fileInput.click()">
+          <span class="choice__icon">
+            <tb-icon name="file" />
+          </span>
+          <h2>CSV или JSON</h2>
+          <p>Загрузить пользователей в систему из файла.</p>
+        </button>
+        <p class="choice__samples">
+          <a href="/samples/users.csv" download>образец CSV</a>
+          <span aria-hidden="true">·</span>
+          <a href="/samples/users.json" download>образец JSON</a>
+        </p>
+        @if (error()) {
+          <p class="choice__error">{{ error() }}</p>
+        }
+      </div>
+    </div>
+    <input
+      #fileInput
+      class="file-input"
+      type="file"
+      accept=".csv,.json,text/csv,application/json"
+      (change)="onFile($event)"
+    />
   </div>
 </section>

@@ -24,6 +24,9 @@ import { Sidebar } from '../sidebar/sidebar';
     .shell__main {
       flex: 1;
       min-width: 0;
+      min-height: calc(100vh - 48px);
+      display: flex;
+      flex-direction: column;
     }
   `,
 })

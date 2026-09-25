@@ -1,11 +1,17 @@
 <aside class="sidebar">
   <nav class="sidebar__nav">
-    @if (nav.canGoBack()) {
-      <button class="nav" type="button" (click)="nav.back()" aria-label="Назад">
-        <tb-icon name="arrow-left" />
-      </button>
-      <span class="sidebar__divider"></span>
-    }
+    <div
+      class="sidebar__back"
+      [class.sidebar__back--open]="nav.canGoBack()"
+      [attr.inert]="nav.canGoBack() ? null : ''"
+    >
+      <div class="sidebar__back-inner">
+        <button class="nav" type="button" (click)="nav.back()" aria-label="Назад">
+          <tb-icon name="arrow-left" />
+        </button>
+        <span class="sidebar__divider"></span>
+      </div>
+    </div>
     <button class="nav" type="button" disabled aria-label="Создать">
       <tb-icon name="plus" />
     </button>

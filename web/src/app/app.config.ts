@@ -10,6 +10,7 @@ import { provideRouter } from '@angular/router';
 import { APP_SETTINGS } from './core/config/app-settings';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { AuthStore } from './core/auth/auth.store';
+import { NavHistory } from './core/nav/nav-history';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
@@ -22,5 +23,8 @@ export const appConfig: ApplicationConfig = {
       document.title = inject(APP_SETTINGS).companyName;
     }),
     provideAppInitializer(() => inject(AuthStore).hydrate()),
+    provideAppInitializer(() => {
+      inject(NavHistory);
+    }),
   ],
 };

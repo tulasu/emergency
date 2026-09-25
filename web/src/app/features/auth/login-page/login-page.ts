@@ -40,7 +40,7 @@ export class LoginPage {
     try {
       const { login, password } = this.form.getRawValue();
       await this.store.login(login, password);
-      await this.router.navigateByUrl('/');
+      await this.router.navigateByUrl('/', { replaceUrl: true });
     } catch (err) {
       this.error.set(apiErrorMessage(err));
     } finally {

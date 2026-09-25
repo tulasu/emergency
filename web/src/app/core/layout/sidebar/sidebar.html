@@ -1,9 +1,11 @@
 <aside class="sidebar">
   <nav class="sidebar__nav">
-    <a class="nav" routerLink="/" aria-label="Назад">
-      <tb-icon name="arrow-left" />
-    </a>
-    <span class="sidebar__divider"></span>
+    @if (nav.canGoBack()) {
+      <button class="nav" type="button" (click)="nav.back()" aria-label="Назад">
+        <tb-icon name="arrow-left" />
+      </button>
+      <span class="sidebar__divider"></span>
+    }
     <a class="nav" routerLink="/users/new" routerLinkActive="nav--active" aria-label="Новые пользователи">
       <tb-icon name="plus" />
     </a>

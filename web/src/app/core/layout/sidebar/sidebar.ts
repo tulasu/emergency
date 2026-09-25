@@ -1,6 +1,7 @@
 import { Component, HostListener, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '../../auth/auth.store';
+import { NavHistory } from '../../nav/nav-history';
 import { TbIcon } from '../../../shared/ui/icon/icon';
 
 @Component({
@@ -12,6 +13,7 @@ import { TbIcon } from '../../../shared/ui/icon/icon';
 export class Sidebar {
   private readonly store = inject(AuthStore);
   private readonly router = inject(Router);
+  readonly nav = inject(NavHistory);
 
   readonly profileOpen = signal(false);
 

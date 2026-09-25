@@ -22,7 +22,7 @@ export class CredentialsPage {
 
   constructor() {
     if (!this.result()) {
-      void this.router.navigateByUrl('/users/new');
+      void this.router.navigateByUrl('/users/new', { replaceUrl: true });
     }
   }
 

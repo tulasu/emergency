@@ -1,6 +1,7 @@
 package calls
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,11 +43,20 @@ func (a *ARI) Originate(to, callID string) (string, error) {
 	form.Set("context", "trainer-out")
 	form.Set("extension", "s")
 	form.Set("priority", "1")
-	form.Set("variables", fmt.Sprintf("call_id=%s", callID))
-	req, err := http.NewRequest("POST", a.BaseURL+"/channels?"+form.Encode(), nil)
+	// ponytail: Asterisk >=18 takes originate variables ONLY as a JSON body
+	// object (api-docs: "the variables key in the body object"); a ?variables=
+	// query pair is silently ignored and the dialplan sees an empty call_id.
+	vars := map[string]string{"call_id": callID}
+	// ponytail: bridge compose passes DIALOG_ADDR (dialog:9001); host-mode falls back to the dialplan default
+	if addr := strings.TrimSpace(os.Getenv("DIALOG_ADDR")); addr != "" {
+		vars["DIALOG_ADDR"] = addr
+	}
+	body, _ := json.Marshal(map[string]any{"variables": vars})
+	req, err := http.NewRequest("POST", a.BaseURL+"/channels?"+form.Encode(), bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Content-Type", "application/json")
 	if a.User != "" {
 		req.SetBasicAuth(a.User, a.Password)
 	}

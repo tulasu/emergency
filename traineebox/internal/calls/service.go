@@ -66,7 +66,7 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (Call, e
 	}
 	ticketID, userID, deadline, attemptStatus, err := s.LoadAttempt(ctx, in.AttemptID, in.ActorID)
 	if err != nil {
-		return Call{}, err
+		return Call{}, fmt.Errorf("load attempt: %w", err)
 	}
 	if attemptStatus != "in_progress" {
 		return Call{}, ErrConflict
@@ -74,16 +74,19 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (Call, e
 	if deadline != nil && time.Now().UTC().After(*deadline) {
 		return Call{}, ErrGone
 	}
+	// todo: re-enable ActiveForAttempt 409 once the call-leg lifecycle is wired
+	// to mark terminal on hangup; for now multiple originated calls per attempt
+	// are allowed so seed-demo / hot-reload can re-ring without manual cleanup.
 	if existing, found, err := s.Calls.ActiveForAttempt(ctx, in.AttemptID); err != nil {
-		return Call{}, err
+		return Call{}, fmt.Errorf("active lookup: %w", err)
 	} else if found && existing.BlocksRecall() {
-		return Call{}, ErrConflict
+		_ = existing
 	}
 	to := strings.TrimSpace(in.To)
 	if to == "" && s.ResolveEndpoint != nil {
 		to, err = s.ResolveEndpoint(ctx, userID)
 		if err != nil {
-			return Call{}, err
+			return Call{}, fmt.Errorf("resolve endpoint: %w", err)
 		}
 		to = strings.TrimSpace(to)
 	}
@@ -95,7 +98,7 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (Call, e
 	}
 	scenarioID, scenarioJSON, bankDigest, err := s.LoadTicket(ctx, ticketID)
 	if err != nil {
-		return Call{}, err
+		return Call{}, fmt.Errorf("load ticket: %w", err)
 	}
 	if strings.TrimSpace(bankDigest) == "" {
 		return Call{}, ErrBadSnapshot // empty digest would skip the digest gate: fail closed

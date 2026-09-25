@@ -23,7 +23,7 @@ func main() {
 		SilenceErrors: true,
 	}
 
-	root.AddCommand(newMigrateCmd(cfg), newSeedAdminCmd(cfg))
+	root.AddCommand(newMigrateCmd(cfg), newSeedAdminCmd(cfg), newImportBankCmd(cfg), newImportScenariosCmd(cfg), newSeedDemoCmd(cfg))
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

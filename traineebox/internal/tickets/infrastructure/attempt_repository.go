@@ -190,9 +190,11 @@ func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.Tick
 	ans, err := r.q.GetAttemptAnswer(ctx, row.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Attempt{}, errs.ErrNotFound
+			// fresh attempt: no answers yet — empty answer is fine, call path doesn't need one
+			ans = ticketssql.AttemptAnswer{}
+		} else {
+			return models.Attempt{}, err
 		}
-		return models.Attempt{}, err
 	}
 	tags, err := r.q.ListAttemptAnswerTags(ctx, row.ID)
 	if err != nil {

@@ -581,14 +581,19 @@ class Cascade:
         )
 
     def candidates(self, text: str, k: int = 5) -> list[str]:
-        """Лучшие k слотов по всем 88 — кандидаты для голосования.
+        """Лучшие k слотов сценария — кандидаты для голосования.
 
-        Берутся все слоты, а не только сценария: голосующий должен иметь
-        возможность выбрать вопрос, на который у заявителя ответа нет.
+        ponytail: голосуем только по слотам заявителя (self.scenario.slots,
+        то же множество, что self.allowed). Раньше брались все 88 слотов, и
+        majority уводил ответ в чужой слот → каскад «затрудняюсь сказать».
+        «Ни о чём» остаётся через пустой выбор: арбитры отказываются сами.
         """
+        allowed = self.scenario.slots
         overall: dict[str, float] = {}
         for scores in self._score(text, rules.detect_act(text)):
             for slot, v in scores.items():
+                if slot not in allowed:
+                    continue
                 if v > overall.get(slot, float("-inf")):
                     overall[slot] = v
         return [s for s, _ in sorted(overall.items(), key=lambda x: -x[1])[:k]]

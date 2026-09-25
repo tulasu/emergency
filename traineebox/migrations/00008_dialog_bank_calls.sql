@@ -106,16 +106,9 @@ SELECT
 FROM user_sip_endpoints
 WHERE enabled;
 
--- Asterisk realtime reads the VIEWs over pgsql: the asterisk role needs
--- SELECT. Conditional so fresh/test DBs without the role still migrate.
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'asterisk') THEN
-        GRANT SELECT ON ps_endpoints TO asterisk;
-        GRANT SELECT ON ps_auths TO asterisk;
-        GRANT SELECT ON ps_aors TO asterisk;
-    END IF;
-END $$;
+-- Asterisk realtime SELECT grants live in the initializer ensure step
+-- (cmd/initializer/migrate.go): goose's splitter breaks on $$ blocks,
+-- the server parses them fine as one Go string.
 
 -- +goose Down
 DROP VIEW IF EXISTS ps_aors;

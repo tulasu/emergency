@@ -84,14 +84,14 @@ func (a *API) putScenario(ctx context.Context, in *putScenarioIn) (*struct{}, er
 	if _, err := a.ResolveActor(ctx, in.Authorization); err != nil {
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
-	if !json.Valid(in.Body.Body.Scenario) {
+	if !json.Valid(in.Body.Scenario) {
 		return nil, huma.Error400BadRequest("scenario must be JSON")
 	}
 	slots, err := a.repo.ListSlotIDs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := Validate(in.Body.Body.Scenario, slots); err != nil {
+	if _, err := Validate(in.Body.Scenario, slots); err != nil {
 		return nil, huma.Error400BadRequest(err.Error())
 	}
 	ticketID, err := uuid.Parse(in.TicketID)
@@ -101,7 +101,7 @@ func (a *API) putScenario(ctx context.Context, in *putScenarioIn) (*struct{}, er
 	if a.SaveScenario == nil {
 		return nil, huma.Error500InternalServerError("scenario store not wired")
 	}
-	if err := a.SaveScenario(ctx, ticketID, string(in.Body.Body.Scenario), in.Body.Body.Version); err != nil {
+	if err := a.SaveScenario(ctx, ticketID, string(in.Body.Scenario), in.Body.Version); err != nil {
 		return nil, mapSaveError(err)
 	}
 	return &struct{}{}, nil
@@ -118,7 +118,7 @@ func (a *API) reload(ctx context.Context, in *reloadIn) (*struct{ Body map[strin
 	if in.ServiceToken != a.serviceToken {
 		return nil, huma.Error401Unauthorized("bad service token")
 	}
-	version := in.Body.Body.Version
+	version := in.Body.Version
 	if version == "" {
 		return nil, huma.Error400BadRequest("version required")
 	}
@@ -219,14 +219,14 @@ type lintIn struct {
 }
 
 func (a *API) lint(ctx context.Context, in *lintIn) (*struct{ Body map[string]any }, error) {
-	if !json.Valid(in.Body.Body.Scenario) {
+	if !json.Valid(in.Body.Scenario) {
 		return nil, huma.Error400BadRequest("scenario must be JSON")
 	}
 	// Proxy the dialog worker: its lint runs the frozen lexical bank, so the
 	// gate actually gates (a local hardcoded unreachable:[] never would — spec B).
 	// Every worker is tried before the degraded fallback.
 	for _, base := range a.dialogURLs {
-		if out, err := postLint(base, in.Body.Body.Scenario, a.serviceToken); err == nil {
+		if out, err := postLint(base, in.Body.Scenario, a.serviceToken); err == nil {
 			return &struct{ Body map[string]any }{Body: out}, nil
 		}
 	}
@@ -234,7 +234,7 @@ func (a *API) lint(ctx context.Context, in *lintIn) (*struct{ Body map[string]an
 	if err != nil {
 		return nil, err
 	}
-	sc, err := Validate(in.Body.Body.Scenario, slots)
+	sc, err := Validate(in.Body.Scenario, slots)
 	if err != nil {
 		return nil, huma.Error400BadRequest(err.Error())
 	}

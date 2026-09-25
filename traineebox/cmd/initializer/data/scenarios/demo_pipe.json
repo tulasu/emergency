@@ -1,0 +1,98 @@
+{
+ "id": "demo_pipe",
+ "meta": {
+  "situation": "Прорыв трубы с горячей водой в подъезде, заливает этажи, пострадавших нет",
+  "address_ref": "Москва, улица Плещеева, дом 14, корпус 2, подъезд 3"
+ },
+ "persona": {
+  "profile": "normal",
+  "opening": "Алло, у нас в подъезде трубу прорвало, кипяток хлещет! Уже два этажа залило!"
+ },
+ "critical": [
+  "incident.what",
+  "addr.full",
+  "access.entrance",
+  "caller.phone"
+ ],
+ "facts": [
+  {
+   "id": "incident.what",
+   "slot": "incident.what",
+   "answers": {
+    "plain": "Трубу с горячей водой прорвало в подъезде, кипяток хлещет.",
+    "short": "Труба лопнула, я же говорю.",
+    "confirm": "Да, горячая вода, прорыв."
+   }
+  },
+  {
+   "id": "addr.full",
+   "slot": "addr.full",
+   "answers": {
+    "plain": "Москва, улица Плещеева, дом 14, корпус 2.",
+    "short": "Плещеева, 14, корпус 2.",
+    "confirm": "Да, Плещеева четырнадцать."
+   }
+  },
+  {
+   "id": "access.entrance",
+   "slot": "access.entrance",
+   "answers": {
+    "plain": "Третий подъезд.",
+    "confirm": "Да, третий."
+   }
+  },
+  {
+   "id": "access.floor",
+   "slot": "access.floor",
+   "answers": {
+    "plain": "Прорвало между пятым и шестым этажом.",
+    "correct": "Нет, между пятым и шестым, не на первом."
+   }
+  },
+  {
+   "id": "structure.damage",
+   "slot": "structure.damage",
+   "answers": {
+    "plain": "Залило пятый и четвёртый этажи, вода вниз идёт."
+   }
+  },
+  {
+   "id": "victim.present",
+   "slot": "victim.present",
+   "answers": {
+    "plain": "Нет, людей не задело, все выскочили.",
+    "confirm": "Нет, никто не пострадал."
+   }
+  },
+  {
+   "id": "access.route",
+   "slot": "access.route",
+   "answers": {
+    "plain": "Кран в подвале, подвал закрыт, ключей ни у кого нет."
+   }
+  },
+  {
+   "id": "access.code",
+   "slot": "access.code",
+   "answers": {
+    "plain": "Код домофона 314."
+   }
+  },
+  {
+   "id": "caller.name",
+   "slot": "caller.name",
+   "answers": {
+    "plain": "Лапшина Вера Николаевна.",
+    "short": "Лапшина, я называла."
+   }
+  },
+  {
+   "id": "caller.phone",
+   "slot": "caller.phone",
+   "answers": {
+    "plain": "Девять один шесть, триста двенадцать, сорок пять, шестьдесят семь.",
+    "short": "Я диктовала уже."
+   }
+  }
+ ]
+}

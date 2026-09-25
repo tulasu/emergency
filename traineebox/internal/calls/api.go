@@ -3,7 +3,9 @@ package calls
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -87,6 +89,7 @@ func (a *API) requestCall(ctx context.Context, in *requestCallIn) (*struct{ Body
 	}
 	call, err := a.svc.RequestCall(ctx, RequestCallInput{AttemptID: in.AttemptID, ActorID: actor, To: in.Body.To})
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "requestCall: attempt=%s actor=%s err=%v\n", in.AttemptID, actor, err)
 		return nil, mapCallError(err)
 	}
 	return &struct{ Body callDTO }{Body: toDTO(call)}, nil
@@ -203,6 +206,9 @@ func mapCallError(err error) error {
 	case errors.Is(err, ErrInvalidInput):
 		return huma.Error400BadRequest("invalid input")
 	default:
+		if errors.Is(err, ticketserrs.ErrNotFound) {
+			return huma.Error404NotFound("attempt not found")
+		}
 		if errors.Is(err, ticketserrs.ErrForbidden) {
 			return huma.Error403Forbidden("forbidden")
 		}

@@ -1,0 +1,14 @@
+# Prod runtime: GPU STT/TTS/LLM-arbiters on top of dispatcher-python (torch 2.14+cu130).
+# Base image already carries torch/cuda, onnxruntime, transformers, laya, pymorphy3, razdel.
+# CPU dev image (Dockerfile) stays untouched; this is the DIALOG_PROD=1 variant.
+FROM dispatcher-python:latest
+
+WORKDIR /app
+COPY dialog/ ./dialog/
+# Runtime deps already in base image; nothing to pip-install here.
+ENV PYTHONUNBUFFERED=1 \
+    DIALOG_WAV_DIR=/tmp/dialog-wav
+# Runs as root (base image default): torch/HF caches write to /root/.cache.
+HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+EXPOSE 8000 9001
+CMD ["python3", "-m", "dialog.serve"]

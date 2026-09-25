@@ -4,11 +4,13 @@ COPY traineebox/go.mod traineebox/go.sum ./
 RUN go mod download
 COPY traineebox/ ./
 RUN go build -o /app/traineebox ./cmd/app
+RUN go build -o /app/initializer ./cmd/initializer
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/traineebox /app/traineebox
+COPY --from=build /app/initializer /app/initializer
 # Unprivileged runtime: listens on $TRAINEEBOX_HTTP_ADDR (:8080).
 USER nobody
 # Any HTTP status (even 404 on /) proves the server is up; refused conn fails.

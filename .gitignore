@@ -31,6 +31,9 @@ bin/
 # downloaded model archives (unpacked models live under dispatcher/models/, already ignored there)
 vosk-model-*.zip
 
+# prod models + caches (llama gguf, gigaam onnx, laya/silero HF caches)
+artifacts/models/
+
 # external input data referenced from PLAN.md (МВД classifier, etc.)
 *.xlsx
 

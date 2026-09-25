@@ -23,6 +23,7 @@ type User struct {
 	Login        string
 	PasswordHash string
 	Role         string
+	FullName     string
 	BlockedAt    *time.Time
 	CreatedAt    time.Time
 }

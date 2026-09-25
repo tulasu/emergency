@@ -5,16 +5,18 @@ import (
 )
 
 type userDTO struct {
-	ID    string `json:"id"`
-	Login string `json:"login"`
-	Role  string `json:"role"`
+	ID       string `json:"id"`
+	Login    string `json:"login"`
+	Role     string `json:"role"`
+	FullName string `json:"full_name"`
 }
 
 func toUserDTO(u models.User) userDTO {
 	return userDTO{
-		ID:    u.ID.String(),
-		Login: u.Login.String(),
-		Role:  string(u.Role),
+		ID:       u.ID.String(),
+		Login:    u.Login.String(),
+		Role:     string(u.Role),
+		FullName: u.FullName,
 	}
 }
 

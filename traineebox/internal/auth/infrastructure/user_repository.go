@@ -30,6 +30,7 @@ func (r *UserRepository) Create(ctx context.Context, user models.User) error {
 		Login:        user.Login.String(),
 		PasswordHash: user.PasswordHash.String(),
 		Role:         string(user.Role),
+		FullName:     user.FullName,
 		BlockedAt:    user.BlockedAt,
 		CreatedAt:    user.CreatedAt,
 	})
@@ -86,6 +87,7 @@ func mapUser(row authsql.User) models.User {
 		Login:        value_objects.Login(row.Login),
 		PasswordHash: value_objects.PasswordHash(row.PasswordHash),
 		Role:         value_objects.Role(row.Role),
+		FullName:     row.FullName,
 		BlockedAt:    row.BlockedAt,
 		CreatedAt:    row.CreatedAt,
 	}

@@ -21,7 +21,7 @@ func (a *API) requireRole(ctx context.Context, token string, roles ...value_obje
 	if slices.Contains(roles, user.Role) {
 		return user, nil
 	}
-	return models.User{}, huma.Error403Forbidden("forbidden")
+	return models.User{}, huma.Error403Forbidden(codeForbidden)
 }
 
 func bearerToken(header string) string {
@@ -32,22 +32,44 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(header)
 }
 
-func mapError(err error) error {
+func errorCode(err error) string {
 	switch {
 	case errors.Is(err, errs.ErrNotFound):
-		return huma.Error404NotFound("not found")
+		return codeNotFound
 	case errors.Is(err, errs.ErrConflict):
-		return huma.Error409Conflict("conflict")
+		return codeConflict
 	case errors.Is(err, errs.ErrInvalidInput):
-		return huma.Error400BadRequest("invalid input")
+		return codeInvalidInput
 	case errors.Is(err, errs.ErrInvalidCreds):
-		return huma.Error401Unauthorized("invalid credentials")
+		return codeInvalidCredentials
 	case errors.Is(err, errs.ErrUnauthorized):
-		return huma.Error401Unauthorized("unauthorized")
+		return codeUnauthorized
 	case errors.Is(err, errs.ErrForbidden):
-		return huma.Error403Forbidden("forbidden")
+		return codeForbidden
 	case errors.Is(err, errs.ErrUserBlocked):
-		return huma.Error403Forbidden("user blocked")
+		return codeUserBlocked
+	default:
+		return codeFailed
+	}
+}
+
+func mapError(err error) error {
+	code := errorCode(err)
+	switch {
+	case errors.Is(err, errs.ErrNotFound):
+		return huma.Error404NotFound(code)
+	case errors.Is(err, errs.ErrConflict):
+		return huma.Error409Conflict(code)
+	case errors.Is(err, errs.ErrInvalidInput):
+		return huma.Error400BadRequest(code)
+	case errors.Is(err, errs.ErrInvalidCreds):
+		return huma.Error401Unauthorized(code)
+	case errors.Is(err, errs.ErrUnauthorized):
+		return huma.Error401Unauthorized(code)
+	case errors.Is(err, errs.ErrForbidden):
+		return huma.Error403Forbidden(code)
+	case errors.Is(err, errs.ErrUserBlocked):
+		return huma.Error403Forbidden(code)
 	default:
 		return err
 	}

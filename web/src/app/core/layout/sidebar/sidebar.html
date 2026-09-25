@@ -1,0 +1,39 @@
+<aside class="sidebar">
+  <nav class="sidebar__nav">
+    <a class="nav" routerLink="/" aria-label="Назад">
+      <tb-icon name="arrow-left" />
+    </a>
+    <span class="sidebar__divider"></span>
+    <a class="nav" routerLink="/users/new" routerLinkActive="nav--active" aria-label="Новые пользователи">
+      <tb-icon name="plus" />
+    </a>
+    <button class="nav" type="button" disabled aria-label="Карточки">
+      <tb-icon name="layers" />
+    </button>
+    <button class="nav" type="button" disabled aria-label="Уроки">
+      <tb-icon name="folder" />
+    </button>
+    <button class="nav" type="button" disabled aria-label="Группы">
+      <tb-icon name="users" />
+    </button>
+  </nav>
+  <div class="sidebar__account" (click)="$event.stopPropagation()">
+    <div class="sidebar__menu" [class.sidebar__menu--open]="profileOpen()" [attr.inert]="profileOpen() ? null : ''">
+      <button class="nav" type="button" disabled aria-label="Настройки">
+        <tb-icon name="settings" />
+      </button>
+      <button class="nav nav--danger" type="button" (click)="logout()" aria-label="Выйти">
+        <tb-icon name="log-out" />
+      </button>
+    </div>
+    <button
+      class="sidebar__avatar"
+      type="button"
+      [attr.aria-expanded]="profileOpen()"
+      aria-label="Профиль"
+      (click)="toggleProfile($event)"
+    >
+      <tb-icon name="user" />
+    </button>
+  </div>
+</aside>

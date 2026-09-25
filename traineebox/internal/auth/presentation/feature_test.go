@@ -132,6 +132,85 @@ func TestAdminRBAC(t *testing.T) {
 	}
 }
 
+func TestProvisionBatch(t *testing.T) {
+	pool := testkit.StartPostgres(t)
+	testkit.Truncate(t, pool)
+	handler := testkit.NewAPI(t, pool)
+
+	_ = testkit.SeedUser(t, pool, "admin", "password1", value_objects.RoleAdmin)
+	_ = testkit.SeedUser(t, pool, "teacher", "password1", value_objects.RoleTeacher)
+	_ = testkit.SeedUser(t, pool, "student", "password1", value_objects.RoleStudent)
+	adminToken := loginToken(t, handler, "admin", "password1")
+	teacherToken := loginToken(t, handler, "teacher", "password1")
+	studentToken := loginToken(t, handler, "student", "password1")
+
+	createGroup := doRequest(t, handler, http.MethodPost, "/groups", teacherToken, map[string]string{"name": "3834201"})
+	if createGroup.StatusCode != http.StatusOK {
+		t.Fatalf("create group status = %d body=%s", createGroup.StatusCode, createGroup.Body)
+	}
+	var group struct {
+		ID string `json:"id"`
+	}
+	mustDecode(t, createGroup.Body, &group)
+
+	unauth := doRequest(t, handler, http.MethodPost, "/auth/users/batch", "", map[string]any{
+		"group_id": group.ID,
+		"users":    []map[string]string{{"full_name": "A B", "login": "ab.user"}},
+	})
+	if unauth.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauth status = %d", unauth.StatusCode)
+	}
+
+	forbidden := doRequest(t, handler, http.MethodPost, "/auth/users/batch", studentToken, map[string]any{
+		"group_id": group.ID,
+		"users":    []map[string]string{{"full_name": "A B", "login": "ab.user"}},
+	})
+	if forbidden.StatusCode != http.StatusForbidden {
+		t.Fatalf("student status = %d body=%s", forbidden.StatusCode, forbidden.Body)
+	}
+
+	ok := doRequest(t, handler, http.MethodPost, "/auth/users/batch", teacherToken, map[string]any{
+		"group_id": group.ID,
+		"users": []map[string]string{
+			{"full_name": "Иванова Анна Петровна", "login": "ivanova.ap"},
+			{"full_name": "Петров Иван", "login": "petrov.i"},
+			{"full_name": "Иванова Анна Петровна", "login": "ivanova.ap"},
+		},
+	})
+	if ok.StatusCode != http.StatusOK {
+		t.Fatalf("batch status = %d body=%s", ok.StatusCode, ok.Body)
+	}
+	var batch struct {
+		Created []struct {
+			Login    string `json:"login"`
+			Password string `json:"password"`
+		} `json:"created"`
+		Failed []struct {
+			Login string `json:"login"`
+			Error string `json:"error"`
+		} `json:"failed"`
+	}
+	mustDecode(t, ok.Body, &batch)
+	if len(batch.Created) != 2 || len(batch.Failed) != 1 || batch.Created[0].Password == "" {
+		t.Fatalf("batch = %+v", batch)
+	}
+
+	loginCreated := doRequest(t, handler, http.MethodPost, "/auth/login", "", map[string]string{
+		"login": "ivanova.ap", "password": batch.Created[0].Password,
+	})
+	if loginCreated.StatusCode != http.StatusOK {
+		t.Fatalf("provisioned login status = %d body=%s", loginCreated.StatusCode, loginCreated.Body)
+	}
+
+	adminBatch := doRequest(t, handler, http.MethodPost, "/auth/users/batch", adminToken, map[string]any{
+		"group_id": group.ID,
+		"users":    []map[string]string{{"full_name": "Козлова Мария", "login": "kozlova.ma"}},
+	})
+	if adminBatch.StatusCode != http.StatusOK {
+		t.Fatalf("admin batch status = %d body=%s", adminBatch.StatusCode, adminBatch.Body)
+	}
+}
+
 type httpResult struct {
 	StatusCode int
 	Body       []byte

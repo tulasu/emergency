@@ -20,6 +20,7 @@ type CreateUserInput struct {
 	Login    string
 	Password string
 	Role     string
+	FullName string
 }
 
 func (uc CreateUser) Execute(ctx context.Context, in CreateUserInput) (models.User, error) {
@@ -28,6 +29,10 @@ func (uc CreateUser) Execute(ctx context.Context, in CreateUserInput) (models.Us
 		return models.User{}, err
 	}
 	role, err := value_objects.ParseRole(in.Role)
+	if err != nil {
+		return models.User{}, err
+	}
+	fullName, err := normalizeFullName(in.FullName, true)
 	if err != nil {
 		return models.User{}, err
 	}
@@ -40,6 +45,7 @@ func (uc CreateUser) Execute(ctx context.Context, in CreateUserInput) (models.Us
 		Login:        login,
 		PasswordHash: hash,
 		Role:         role,
+		FullName:     fullName,
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := uc.Users.Create(ctx, user); err != nil {

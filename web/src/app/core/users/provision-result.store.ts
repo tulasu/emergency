@@ -1,0 +1,7 @@
+import { Injectable, signal } from '@angular/core';
+import { ProvisionResult } from '../auth/auth.models';
+
+@Injectable({ providedIn: 'root' })
+export class ProvisionResultStore {
+  readonly result = signal<ProvisionResult | null>(null);
+}

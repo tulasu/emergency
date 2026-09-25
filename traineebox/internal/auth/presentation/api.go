@@ -13,6 +13,7 @@ type API struct {
 	blockUser    application.BlockUser
 	changeRole   application.ChangeRole
 	authenticate application.Authenticate
+	provision    application.ProvisionUsers
 }
 
 type Deps struct {
@@ -24,6 +25,7 @@ type Deps struct {
 	BlockUser    application.BlockUser
 	ChangeRole   application.ChangeRole
 	Authenticate application.Authenticate
+	Provision    application.ProvisionUsers
 }
 
 func NewAPI(deps Deps) *API {
@@ -36,5 +38,6 @@ func NewAPI(deps Deps) *API {
 		blockUser:    deps.BlockUser,
 		changeRole:   deps.ChangeRole,
 		authenticate: deps.Authenticate,
+		provision:    deps.Provision,
 	}
 }

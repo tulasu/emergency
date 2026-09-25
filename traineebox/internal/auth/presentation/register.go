@@ -25,6 +25,15 @@ func Register(api huma.API, a *API) {
 	}, a.createUserHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "provision-users",
+		Method:      http.MethodPost,
+		Path:        "/auth/users/batch",
+		Summary:     "Provision students into a group",
+		Tags:        []string{"Auth"},
+		Security:    []map[string][]string{{"session": {}}},
+	}, a.provisionUsersHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "login",
 		Method:      http.MethodPost,
 		Path:        "/auth/login",

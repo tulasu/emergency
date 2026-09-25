@@ -207,7 +207,7 @@ func (a *API) addMemberHandler(ctx context.Context, in *addMemberInput) (*groupO
 	}
 	userID, err := uuid.Parse(in.Body.UserID)
 	if err != nil {
-		return nil, huma.Error400BadRequest("invalid input")
+		return nil, huma.Error400BadRequest("invalid_input")
 	}
 	group, err := a.addMember.Execute(ctx, application.AddMemberInput{
 		ActorID: user.ID,

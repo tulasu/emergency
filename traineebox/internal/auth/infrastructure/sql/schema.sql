@@ -3,6 +3,7 @@ CREATE TABLE users (
     login TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL,
+    full_name TEXT NOT NULL DEFAULT '',
     blocked_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL
 );

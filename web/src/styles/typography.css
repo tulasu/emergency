@@ -1,0 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&display=swap");
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.page-title {
+  font: var(--font-display);
+}
+
+.page-title--login {
+  font: var(--font-title);
+}
+
+.page-sub {
+  font: var(--font-mute);
+  color: var(--color-text-muted);
+}

@@ -51,6 +51,10 @@ func main() {
 	hasher := application.PasswordHasher{}
 	authenticate := application.Authenticate{Users: users, Sessions: sessions}
 
+	groupsRepo := groupsinfra.NewGroupRepository(pool)
+	directory := groupsinfra.NewUserDirectory(pool)
+	addMember := groupsapp.AddMember{Groups: groupsRepo, Directory: directory}
+
 	authHandlers := authpresentation.NewAPI(authpresentation.Deps{
 		Version:      version,
 		CreateUser:   application.CreateUser{Users: users, Hasher: hasher},
@@ -60,17 +64,20 @@ func main() {
 		BlockUser:    application.BlockUser{Users: users},
 		ChangeRole:   application.ChangeRole{Users: users},
 		Authenticate: authenticate,
+		Provision: application.ProvisionUsers{
+			Users:  users,
+			Hasher: hasher,
+			Enroll: studentEnroller{add: addMember},
+		},
 	})
 
-	groupsRepo := groupsinfra.NewGroupRepository(pool)
-	directory := groupsinfra.NewUserDirectory(pool)
 	groupsHandlers := groupspresentation.NewAPI(groupspresentation.Deps{
 		CreateGroup:  groupsapp.CreateGroup{Groups: groupsRepo, Directory: directory},
 		RenameGroup:  groupsapp.RenameGroup{Groups: groupsRepo},
 		DeleteGroup:  groupsapp.DeleteGroup{Groups: groupsRepo},
 		ListGroups:   groupsapp.ListGroups{Groups: groupsRepo},
 		GetGroup:     groupsapp.GetGroup{Groups: groupsRepo},
-		AddMember:    groupsapp.AddMember{Groups: groupsRepo, Directory: directory},
+		AddMember:    addMember,
 		RemoveMember: groupsapp.RemoveMember{Groups: groupsRepo},
 		Authenticate: groupsSessionAuthenticator{auth: authenticate},
 	})

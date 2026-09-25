@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,17 +42,18 @@ func TestBearerToken(t *testing.T) {
 func TestMapError(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		err  error
-		code int
+		name   string
+		err    error
+		status int
+		code   string
 	}{
-		{name: "not found", err: errs.ErrNotFound, code: 404},
-		{name: "conflict", err: errs.ErrConflict, code: 409},
-		{name: "invalid input", err: errs.ErrInvalidInput, code: 400},
-		{name: "invalid creds", err: errs.ErrInvalidCreds, code: 401},
-		{name: "unauthorized", err: errs.ErrUnauthorized, code: 401},
-		{name: "forbidden", err: errs.ErrForbidden, code: 403},
-		{name: "blocked", err: errs.ErrUserBlocked, code: 403},
+		{name: "not found", err: errs.ErrNotFound, status: 404, code: codeNotFound},
+		{name: "conflict", err: errs.ErrConflict, status: 409, code: codeConflict},
+		{name: "invalid input", err: errs.ErrInvalidInput, status: 400, code: codeInvalidInput},
+		{name: "invalid creds", err: errs.ErrInvalidCreds, status: 401, code: codeInvalidCredentials},
+		{name: "unauthorized", err: errs.ErrUnauthorized, status: 401, code: codeUnauthorized},
+		{name: "forbidden", err: errs.ErrForbidden, status: 403, code: codeForbidden},
+		{name: "blocked", err: errs.ErrUserBlocked, status: 403, code: codeUserBlocked},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,8 +63,11 @@ func TestMapError(t *testing.T) {
 			if !errors.As(mapped, &se) {
 				t.Fatalf("expected StatusError, got %T %v", mapped, mapped)
 			}
-			if se.GetStatus() != tt.code {
-				t.Fatalf("status = %d, want %d", se.GetStatus(), tt.code)
+			if se.GetStatus() != tt.status {
+				t.Fatalf("status = %d, want %d", se.GetStatus(), tt.status)
+			}
+			if !strings.Contains(se.Error(), tt.code) {
+				t.Fatalf("error = %q, want code %q", se.Error(), tt.code)
 			}
 		})
 	}

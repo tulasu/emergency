@@ -1,0 +1,28 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.tb-check {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-text);
+}
+
+.tb-check--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tb-check svg {
+  width: 14px;
+  height: 14px;
+}

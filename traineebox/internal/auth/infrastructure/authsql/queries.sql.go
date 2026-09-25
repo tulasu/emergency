@@ -37,8 +37,8 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, login, password_hash, role, blocked_at, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (id, login, password_hash, role, full_name, blocked_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateUserParams struct {
@@ -46,6 +46,7 @@ type CreateUserParams struct {
 	Login        string
 	PasswordHash string
 	Role         string
+	FullName     string
 	BlockedAt    *time.Time
 	CreatedAt    time.Time
 }
@@ -56,6 +57,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 		arg.Login,
 		arg.PasswordHash,
 		arg.Role,
+		arg.FullName,
 		arg.BlockedAt,
 		arg.CreatedAt,
 	)
@@ -102,7 +104,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, login, password_hash, role, blocked_at, created_at
+SELECT id, login, password_hash, role, full_name, blocked_at, created_at
 FROM users
 WHERE id = $1
 `
@@ -115,6 +117,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Login,
 		&i.PasswordHash,
 		&i.Role,
+		&i.FullName,
 		&i.BlockedAt,
 		&i.CreatedAt,
 	)
@@ -122,7 +125,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, login, password_hash, role, blocked_at, created_at
+SELECT id, login, password_hash, role, full_name, blocked_at, created_at
 FROM users
 WHERE login = $1
 `
@@ -135,6 +138,7 @@ func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error
 		&i.Login,
 		&i.PasswordHash,
 		&i.Role,
+		&i.FullName,
 		&i.BlockedAt,
 		&i.CreatedAt,
 	)

@@ -1,0 +1,21 @@
+<div class="login">
+  <form tbCard class="login__card" [formGroup]="form" (ngSubmit)="submit()">
+    <header class="login__header">
+      <h1 class="page-title page-title--login">Вход</h1>
+      <p class="page-sub">Введите логин и пароль</p>
+    </header>
+    <div class="login__fields">
+      <tb-field label="Логин">
+        <tb-input formControlName="login" autocomplete="username" />
+      </tb-field>
+      <tb-field label="Пароль">
+        <tb-input formControlName="password" type="password" autocomplete="current-password" />
+      </tb-field>
+    </div>
+    @if (error()) {
+      <p class="login__error">{{ error() }}</p>
+    }
+    <button tbButton width="block" type="submit" [disabled]="pending()">Войти</button>
+  </form>
+  <p class="login__copy">© Токенoeжки, 2026</p>
+</div>

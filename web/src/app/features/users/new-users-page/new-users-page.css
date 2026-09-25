@@ -1,0 +1,50 @@
+.page {
+  padding: 16px 8px 24px;
+}
+
+.page__header {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 48px;
+}
+
+.choices {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  padding-top: 48px;
+}
+
+.choice {
+  width: 420px;
+  min-width: 420px;
+  flex-shrink: 0;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.choice__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--color-secondary);
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice h2 {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.choice p {
+  color: var(--color-text-muted);
+  font: var(--font-mute);
+}

@@ -13,6 +13,7 @@ type User struct {
 	Login        value_objects.Login
 	PasswordHash value_objects.PasswordHash
 	Role         value_objects.Role
+	FullName     string
 	BlockedAt    *time.Time
 	CreatedAt    time.Time
 }

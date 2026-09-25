@@ -30,6 +30,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -134,6 +135,10 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	hasher := application.PasswordHasher{}
 	authenticate := application.Authenticate{Users: users, Sessions: sessions}
 
+	groupsRepo := groupsinfra.NewGroupRepository(pool)
+	directory := groupsinfra.NewUserDirectory(pool)
+	addMember := groupsapp.AddMember{Groups: groupsRepo, Directory: directory}
+
 	authHandlers := authpresentation.NewAPI(authpresentation.Deps{
 		Version:      "test",
 		CreateUser:   application.CreateUser{Users: users, Hasher: hasher},
@@ -143,17 +148,20 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		BlockUser:    application.BlockUser{Users: users},
 		ChangeRole:   application.ChangeRole{Users: users},
 		Authenticate: authenticate,
+		Provision: application.ProvisionUsers{
+			Users:  users,
+			Hasher: hasher,
+			Enroll: testStudentEnroller{add: addMember},
+		},
 	})
 
-	groupsRepo := groupsinfra.NewGroupRepository(pool)
-	directory := groupsinfra.NewUserDirectory(pool)
 	groupsHandlers := groupspresentation.NewAPI(groupspresentation.Deps{
 		CreateGroup:  groupsapp.CreateGroup{Groups: groupsRepo, Directory: directory},
 		RenameGroup:  groupsapp.RenameGroup{Groups: groupsRepo},
 		DeleteGroup:  groupsapp.DeleteGroup{Groups: groupsRepo},
 		ListGroups:   groupsapp.ListGroups{Groups: groupsRepo},
 		GetGroup:     groupsapp.GetGroup{Groups: groupsRepo},
-		AddMember:    groupsapp.AddMember{Groups: groupsRepo, Directory: directory},
+		AddMember:    addMember,
 		RemoveMember: groupsapp.RemoveMember{Groups: groupsRepo},
 		Authenticate: groupsSessionAuthenticator{auth: authenticate},
 	})
@@ -191,13 +199,13 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 
 	jobsRepo := geninfra.NewJobRepository(pool)
 	genHandlers := genpresentation.NewAPI(genpresentation.Deps{
-		CreateJob:  genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
-		ListJobs:   genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
-		GetJob:     genapp.GetJob{Jobs: jobsRepo, Membership: membership},
-		PatchJob:   genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
-		RetryJob:   genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
-		CancelJob:  genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
-		DeleteJob:  genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
+		CreateJob: genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
+		ListJobs:  genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
+		GetJob:    genapp.GetJob{Jobs: jobsRepo, Membership: membership},
+		PatchJob:  genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
+		RetryJob:  genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
+		CancelJob: genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
+		DeleteJob: genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
 		ApproveJob: genapp.ApproveJob{
 			Jobs: jobsRepo, Membership: membership, Tickets: ticketsRepo, Catalog: catalogRepo,
 		},
@@ -219,4 +227,35 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	ticketspresentation.Register(api, ticketsHandlers)
 	genpresentation.Register(api, genHandlers)
 	return router
+}
+
+type testStudentEnroller struct {
+	add groupsapp.AddMember
+}
+
+func (e testStudentEnroller) EnrollStudent(ctx context.Context, actorID uuid.UUID, admin bool, groupID, userID uuid.UUID) error {
+	_, err := e.add.Execute(ctx, groupsapp.AddMemberInput{
+		ActorID: actorID,
+		Admin:   admin,
+		GroupID: groupID,
+		UserID:  userID,
+		Role:    "student",
+	})
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, groupserrs.ErrForbidden):
+		return autherrs.ErrForbidden
+	case errors.Is(err, groupserrs.ErrNotFound):
+		return autherrs.ErrNotFound
+	case errors.Is(err, groupserrs.ErrConflict):
+		return autherrs.ErrConflict
+	case errors.Is(err, groupserrs.ErrInvalidInput):
+		return autherrs.ErrInvalidInput
+	case errors.Is(err, groupserrs.ErrUserBlocked):
+		return autherrs.ErrUserBlocked
+	default:
+		return err
+	}
 }

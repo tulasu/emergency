@@ -39,3 +39,6 @@ artifacts/models/
 
 # stray editor/backup files
 *.bak
+
+# harness
+.cursor/

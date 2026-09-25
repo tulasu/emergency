@@ -39,17 +39,17 @@ func bearerToken(header string) string {
 func mapError(err error) error {
 	switch {
 	case errors.Is(err, errs.ErrNotFound):
-		return huma.Error404NotFound("not found")
+		return huma.Error404NotFound("not_found")
 	case errors.Is(err, errs.ErrConflict):
 		return huma.Error409Conflict("conflict")
 	case errors.Is(err, errs.ErrInvalidInput):
-		return huma.Error400BadRequest("invalid input")
+		return huma.Error400BadRequest("invalid_input")
 	case errors.Is(err, errs.ErrUnauthorized):
 		return huma.Error401Unauthorized("unauthorized")
 	case errors.Is(err, errs.ErrForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, errs.ErrUserBlocked):
-		return huma.Error403Forbidden("user blocked")
+		return huma.Error403Forbidden("user_blocked")
 	default:
 		return err
 	}

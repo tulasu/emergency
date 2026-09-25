@@ -1,0 +1,36 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1 class="page-title">Пакет пользователей</h1>
+      <p class="page-sub">Каждая строка — один человек. Плюс добавляет ещё. Пароли сгенерируем при создании.</p>
+    </div>
+    <tb-field class="page__group" label="Группа">
+      <tb-select [formControl]="form.controls.group_id" placeholder="Выберите группу" [options]="groupOptions()" />
+    </tb-field>
+  </header>
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <div tbCard class="table" formArrayName="users">
+      <div class="table__head">
+        <span>№</span>
+        <span>ФИО</span>
+        <span>Логин</span>
+      </div>
+      @for (row of users.controls; track $index; let i = $index) {
+        <div class="table__row" [formGroupName]="i">
+          <span>{{ i + 1 }}</span>
+          <tb-input formControlName="full_name" />
+          <tb-input formControlName="login" />
+        </div>
+      }
+      <button class="table__add" type="button" (click)="addRow()">+ Добавить строку</button>
+    </div>
+    <footer class="foot">
+      <p>{{ users.length }} строк · пароли сгенерируются автоматически</p>
+      @if (error()) {
+        <p class="foot__error">{{ error() }}</p>
+      }
+      <button tbButton type="submit" [disabled]="pending()">Создать пакет</button>
+    </footer>
+  </form>
+</section>

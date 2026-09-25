@@ -1,0 +1,22 @@
+<section class="page">
+  <header class="page__header">
+    <h1 class="page-title">Один пользователь</h1>
+    <p class="page-sub">Пароль сгенерируем и покажем на экране доступов.</p>
+  </header>
+  <form class="form" [formGroup]="form" (ngSubmit)="submit()">
+    <tb-field label="ФИО">
+      <tb-input formControlName="full_name" />
+    </tb-field>
+    <tb-field label="Логин">
+      <tb-input formControlName="login" />
+    </tb-field>
+    <tb-field label="Группа">
+      <tb-select formControlName="group_id" placeholder="Выберите группу" [options]="groupOptions()" />
+    </tb-field>
+    <label tbCheckRow label="Сгенерировать пароль" [(checked)]="generate"></label>
+    @if (error()) {
+      <p class="form__error">{{ error() }}</p>
+    }
+    <button tbButton variant="secondary" type="submit" [disabled]="pending()">Создать пользователя</button>
+  </form>
+</section>

@@ -1,0 +1,22 @@
+.page {
+  padding: 16px 8px 24px;
+}
+
+.page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.form {
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form__error {
+  margin: 0;
+  color: var(--color-danger);
+}

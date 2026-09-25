@@ -125,6 +125,43 @@ class Catalog:
             if s not in self.services:
                 raise ValueError(f"unknown service_code: {s!r}")
 
+    def repair_tags(
+        self,
+        type_code: str,
+        tag_codes: list[str],
+        groups_scope: list[TagGroup] | None = None,
+    ) -> list[str]:
+        t = self.types.get(type_code)
+        if not t:
+            return []
+        groups = groups_scope if groups_scope is not None else t.groups
+        allowed = {tag.code for g in groups for tag in g.tags}
+        selected = [c for c in tag_codes if c in allowed]
+        for _ in range(4):
+            keep: list[str] = []
+            selected_set = set(selected)
+            for g in groups:
+                visible = not g.parent_tag or g.parent_tag in selected_set
+                if not visible:
+                    continue
+                group_tags = [c for c in selected if c in {x.code for x in g.tags}]
+                if not group_tags:
+                    continue
+                if g.selection_mode == "single":
+                    keep.append(group_tags[0])
+                else:
+                    keep.extend(group_tags)
+            if keep == selected:
+                break
+            selected = keep
+        out: list[str] = []
+        seen: set[str] = set()
+        for c in selected:
+            if c not in seen:
+                out.append(c)
+                seen.add(c)
+        return out
+
     def _validate_tags(self, type_code: str, tag_codes: list[str]) -> None:
         if not tag_codes:
             return

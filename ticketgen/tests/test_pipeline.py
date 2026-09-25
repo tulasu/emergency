@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from catalog import load_catalog  # noqa: E402
 from pipeline import Pipeline  # noqa: E402
+from schemas import type_model  # noqa: E402
 
 CATALOG_DIR = Path(__file__).resolve().parents[2] / "artifacts" / "etc" / "traineebox" / "catalog"
 
@@ -22,13 +24,13 @@ class MockLLM:
         self.calls = 0
         self.prompts: list[str] = []
 
-    def chat_json(self, system: str, user: str, *, temperature: float = 0.4, max_tokens: int = 1024) -> dict:
+    def complete(self, system: str, user: str, response_model, *, temperature: float = 0.4, max_tokens: int = 1024):
         self.prompts.append(user)
         if self.calls >= len(self.responses):
             raise RuntimeError(f"no more mock responses (call {self.calls})")
         out = self.responses[self.calls]
         self.calls += 1
-        return dict(out)
+        return response_model.model_validate(out)
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +85,15 @@ def test_validate_reference_bad_tag(catalog):
         )
 
 
+def test_type_schema_from_yaml(catalog):
+    model = type_model(catalog)
+    assert model.model_validate({"incident_type_code": "101"}).incident_type_code == "101"
+    with pytest.raises(ValidationError):
+        model.model_validate({"incident_type_code": "пожар"})
+    with pytest.raises(ValidationError):
+        model.model_validate({"incident_type_code": "fire"})
+
+
 def test_atomic_pipeline_walk_101(catalog):
     """scenario → type → per-group tags → common → services."""
     llm = MockLLM(
@@ -134,5 +145,5 @@ def test_pipeline_fails_on_bad_type(catalog):
             {"incident_type_code": "no_such_type_xyz"},
         ]
     )
-    with pytest.raises(ValueError, match="unknown type"):
+    with pytest.raises(ValidationError):
         Pipeline(catalog, llm=llm).run("абвгд неизвестное")

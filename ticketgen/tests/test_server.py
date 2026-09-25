@@ -21,16 +21,36 @@ from pipeline import Pipeline  # noqa: E402
 
 
 class FakeLLM:
-    def chat_json(self, system, user, **kw):
-        if "классификатор" in system or "incident_type" in system.lower() or "ОДИН тип" in system:
-            return {"incident_type_code": "101"}
-        if "title" in system and "scenario" in system:
-            return {"title": "Пожар", "scenario": "Горит склад. Звонит сосед."}
-        if "tag_codes" in system:
-            return {"tag_codes": []}
-        if "service_codes" in system:
-            return {"service_codes": ["sluzhba_101"]}
-        return {}
+    def complete(self, system, user, response_model, **kw):
+        fields = response_model.model_fields
+        if "incident_type_code" in fields:
+            return response_model.model_validate({"incident_type_code": "101"})
+        if "title" in fields and "scenario" in fields:
+            return response_model.model_validate(
+                {"title": "Пожар", "scenario": "Горит склад. Звонит сосед."}
+            )
+        if "tag_codes" in fields:
+            schema = response_model.model_json_schema()
+            props = schema.get("properties", {}).get("tag_codes", {})
+            first = _first_item(props)
+            if props.get("minItems", 0) >= 1 and first:
+                return response_model.model_validate({"tag_codes": [first]})
+            return response_model.model_validate({"tag_codes": []})
+        if "service_codes" in fields:
+            return response_model.model_validate({"service_codes": ["sluzhba_101"]})
+        raise RuntimeError(f"unexpected model {response_model}")
+
+
+def _first_item(props: dict) -> str | None:
+    items = props.get("items", {})
+    if "const" in items:
+        return items["const"]
+    if "enum" in items:
+        return items["enum"][0]
+    ref = items.get("$ref")
+    if ref:
+        return ref.rsplit("/", 1)[-1]
+    return None
 
 
 def tiny_catalog() -> Catalog:

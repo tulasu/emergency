@@ -4,18 +4,27 @@
       <h1 class="page-title page-title--login">Вход</h1>
       <p class="page-sub">Введите логин и пароль</p>
     </header>
-    <div class="login__fields">
-      <tb-field label="Логин">
-        <tb-input formControlName="login" autocomplete="username" />
-      </tb-field>
-      <tb-field label="Пароль">
-        <tb-input formControlName="password" type="password" autocomplete="current-password" />
-      </tb-field>
+    <div class="login__main">
+      <div class="login__fields">
+        <tb-field label="Логин">
+          <tb-input formControlName="login" autocomplete="username" placeholder="Введите логин" />
+        </tb-field>
+        <tb-field label="Пароль">
+          <tb-input
+            formControlName="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Введите пароль"
+          />
+        </tb-field>
+      </div>
+      <div class="login__alert" [class.login__alert--on]="error()" [attr.aria-hidden]="error() ? null : true">
+        <div class="login__alert-inner">
+          <p class="login__error" aria-live="polite">{{ error() }}</p>
+        </div>
+      </div>
+      <button tbButton width="block" type="submit" [busy]="pending()">Войти</button>
     </div>
-    @if (error()) {
-      <p class="login__error">{{ error() }}</p>
-    }
-    <button tbButton width="block" type="submit" [disabled]="pending()">Войти</button>
   </form>
-  <p class="login__copy">© Токенoeжки, 2026</p>
+  <p class="login__copy">© {{ companyName }}, {{ year }}</p>
 </div>

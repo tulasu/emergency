@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../../core/api/api-error';
+import { APP_SETTINGS } from '../../../core/config/app-settings';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { TbButton } from '../../../shared/ui/button/button';
 import { TbCard } from '../../../shared/ui/card/card';
@@ -18,6 +19,8 @@ export class LoginPage {
   private readonly fb = inject(FormBuilder);
   private readonly store = inject(AuthStore);
   private readonly router = inject(Router);
+  readonly companyName = inject(APP_SETTINGS).companyName;
+  readonly year = new Date().getFullYear();
 
   readonly error = signal('');
   readonly pending = signal(false);
@@ -33,7 +36,7 @@ export class LoginPage {
       return;
     }
     this.pending.set(true);
-    this.error.set('');
+    this.form.disable({ emitEvent: false });
     try {
       const { login, password } = this.form.getRawValue();
       await this.store.login(login, password);
@@ -41,6 +44,7 @@ export class LoginPage {
     } catch (err) {
       this.error.set(apiErrorMessage(err));
     } finally {
+      this.form.enable({ emitEvent: false });
       this.pending.set(false);
     }
   }

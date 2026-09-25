@@ -47,7 +47,7 @@ export class CreateManualPage implements OnInit {
   }
 
   countLabel(): string {
-    return ruCount(this.users.length, 'учётка', 'учётки', 'учёток');
+    return ruCount(this.users.length, 'учётная запись', 'учётные записи', 'учётных записей');
   }
 
   addRow(): void {
@@ -65,7 +65,7 @@ export class CreateManualPage implements OnInit {
     const filled = filledUsers(this.users);
     if (!this.form.controls.group_id.value || filled.length === 0 || this.pending()) {
       this.form.markAllAsTouched();
-      this.error.set('Заполните группу и хотя бы одну строку');
+      this.error.set('Выберите группу и заполните хотя бы одну учётную запись');
       return;
     }
     this.pending.set(true);

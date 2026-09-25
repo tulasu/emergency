@@ -32,7 +32,7 @@ export class CredentialsPage {
     const count = ruCount(this.created().length, 'пользователь', 'пользователя', 'пользователей');
     const group = this.groupName();
     const groupPart = group ? ` · группа ${group}` : '';
-    return `${count}${groupPart}. Пароли больше не покажем — скопируйте или скачайте сейчас.`;
+    return `${count}${groupPart}. Пароли больше не будут отображаться. Скопируйте или скачайте их сейчас.`;
   }
 
   failMessage(code: string): string {

@@ -10,7 +10,7 @@
       <div class="table__row" [formGroup]="rowGroup(i)">
         <span>{{ i + 1 }}</span>
         <tb-input formControlName="full_name" placeholder="ФИО" />
-        <tb-input formControlName="login" placeholder="логин" />
+        <tb-input formControlName="login" placeholder="Логин" />
         <button type="button" class="table__del" (click)="remove.emit(i)" aria-label="Удалить строку">
           <tb-icon name="x" />
         </button>

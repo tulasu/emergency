@@ -64,7 +64,7 @@ export class ImportUsersPage implements OnInit {
   }
 
   countLabel(): string {
-    const base = ruCount(this.users.length, 'учётка', 'учётки', 'учёток');
+    const base = ruCount(this.users.length, 'учётная запись', 'учётные записи', 'учётных записей');
     return this.fileName() ? `${base} из ${this.fileName()}` : base;
   }
 
@@ -102,7 +102,7 @@ export class ImportUsersPage implements OnInit {
     const filled = filledUsers(this.users);
     if (!this.form.controls.group_id.value || filled.length === 0 || this.pending()) {
       this.form.markAllAsTouched();
-      this.error.set('Загрузите файл, выберите группу и оставьте хотя бы одну строку');
+      this.error.set('Загрузите файл, выберите группу и оставьте хотя бы одну учётную запись');
       return;
     }
     this.pending.set(true);

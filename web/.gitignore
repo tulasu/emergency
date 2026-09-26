@@ -1,10 +1,11 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
 # Compiled output
 /dist
 /tmp
 /out-tsc
-/bazel-out
+.nuxt
+.output
+.nitro
+.cache
 
 # Node
 /node_modules
@@ -30,13 +31,7 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
-.sass-cache/
-/connect.lock
 /coverage
-/libpeerconnection.log
-testem.log
-/typings
 __screenshots__/
 
 # System files

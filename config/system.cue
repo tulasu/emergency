@@ -39,6 +39,21 @@ import "strings"
 	dialog: {
 		device: *"cpu" | string
 	}
+	audio: {
+		postgres: {
+			user:     string & =~"^.+$"
+			password: string & =~"^.+$"
+			database: string & =~"^.+$"
+		}
+		s3: {
+			access_key: string & =~"^.+$"
+			secret_key: string & =~"^.+$"
+		}
+		voice: *"kseniya" | string
+		rate:  *8000 | int
+		synth_device: *"cuda" | string
+		sweep_minutes: *10 | int
+	}
 }
 
 config: #Config
@@ -217,11 +232,97 @@ compose: {
 			]
 			restart: "unless-stopped"
 		}
+		"audio-postgres": {
+			image: "postgres:16"
+			environment: {
+				POSTGRES_USER:     config.audio.postgres.user
+				POSTGRES_PASSWORD: config.audio.postgres.password
+				POSTGRES_DB:       config.audio.postgres.database
+			}
+			ports: ["5433:5432"]
+			volumes: [
+				"audio_postgres_data:/var/lib/postgresql/data",
+			]
+			healthcheck: {
+				test: ["CMD-SHELL", "pg_isready -U \(config.audio.postgres.user)"]
+				interval: "5s"
+				timeout:  "3s"
+				retries:   5
+			}
+			restart: "unless-stopped"
+		}
+		audio: {
+			build: {
+				context:    "."
+				dockerfile: "audio/Dockerfile"
+			}
+			depends_on: {
+				"audio-postgres": {
+					condition: "service_healthy"
+				}
+			}
+			ports: ["8002:8002"]
+			environment: {
+				AUDIO_HTTP_ADDR:    ":8002"
+				AUDIO_DATABASE_URL: "postgres://\(config.audio.postgres.user):\(config.audio.postgres.password)@audio-postgres:5432/\(config.audio.postgres.database)?sslmode=disable"
+				AUDIO_S3_ENDPOINT:  "http://rustfs:9000"
+				AUDIO_S3_BUCKET:    "emergency-audio"
+				AUDIO_S3_KEY:       config.audio.s3.access_key
+				AUDIO_S3_SECRET:    config.audio.s3.secret_key
+				AUDIO_VOICE:        config.audio.voice
+				AUDIO_RATE:         "\(config.audio.rate)"
+				AUDIO_SYNTH_URL:    "http://audio-synth:8003"
+				AUDIO_SWEEP_MINUTES: "\(config.audio.sweep_minutes)"
+				INTERNAL_SERVICE_TOKEN: config.service_token
+			}
+			restart: "unless-stopped"
+		}
+		"audio-synth": {
+			build: {
+				context:    "."
+				dockerfile: "audio-synth/Dockerfile"
+			}
+			gpus: "all"
+			ports: ["8003:8003"]
+			environment: {
+				SYNTH_PORT:   "8003"
+				SYNTH_DEVICE: config.audio.synth_device
+				TORCH_HOME:   "/models/torch"
+				HF_HOME:      "/models"
+			}
+			volumes: [
+				"audio_models:/models",
+			]
+			restart: "unless-stopped"
+		}
+		rustfs: {
+			image: "rustfs/rustfs:latest"
+			ports: ["9002:9000", "9003:9001"]
+			environment: {
+				RUSTFS_VOLUMES:               "/data/rustfs0"
+				RUSTFS_ADDRESS:               "0.0.0.0:9000"
+				RUSTFS_CONSOLE_ADDRESS:       "0.0.0.0:9001"
+				RUSTFS_CONSOLE_ENABLE:        "true"
+				RUSTFS_ACCESS_KEY:            config.audio.s3.access_key
+				RUSTFS_SECRET_KEY:            config.audio.s3.secret_key
+				RUSTFS_OBS_LOG_DIRECTORY:     "/app/logs"
+				RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
+			}
+			volumes: [
+				"rustfs_data:/data/rustfs0",
+				"rustfs_logs:/app/logs",
+			]
+			restart: "unless-stopped"
+		}
 	}
 	volumes: {
 		postgres_data: {}
 		caddy_data:    {}
 		caddy_config:  {}
 		dialog_models: {}
+		audio_postgres_data: {}
+		audio_models: {}
+		rustfs_data: {}
+		rustfs_logs: {}
 	}
 }

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """audio-synth: stateless Silero waveform daemon (spec 06).
 
-Boundary: pure GPU function, no DB/S3/queue. Loads Silero v4_ru `kseniya`
-once at startup (+warmup like dialog silero_tts), one _lock per process,
-speakable digits, 48k→8k resample, espeak fallback on exotic input.
+Boundary: pure GPU function, no DB/S3/queue. Loads Silero v4_ru and
+the Russian neural Piper fallback at startup. One _lock per process,
+speakable digits, 48k→8k resample for Silero, 22.05k→8k for Piper.
 
     POST /synth {text, voice} -> audio/wav (8kHz mono s16)
     GET  /health -> {"ok": true}
@@ -27,6 +27,8 @@ from speakable import speakable
 VOICES = ("aidar", "baya", "kseniya", "xenia", "eugene")
 DEFAULT_VOICE = os.environ.get("SYNTH_VOICE", "kseniya")
 DEVICE = os.environ.get("SYNTH_DEVICE", "cuda")
+PIPER_MODEL_PATH = os.environ.get(
+    "PIPER_MODEL_PATH", "/opt/piper/ru_RU-denis-medium.onnx")
 SILERO_RATE = 48000
 OUT_RATE = 8000
 MAX_TEXT = 2000
@@ -34,6 +36,7 @@ MAX_TEXT = 2000
 _lock = threading.Lock()
 _model = None
 _torch = None
+_piper = None
 
 
 def _device():
@@ -44,9 +47,11 @@ def _device():
 
 def load() -> None:
     """Load Silero once + warmup; called at boot, not per request."""
-    global _model, _torch
+    global _model, _torch, _piper
     import torch
+    from piper import PiperVoice
 
+    _piper = PiperVoice.load(PIPER_MODEL_PATH)
     _torch = torch
     _model, _ = torch.hub.load(
         repo_or_dir="snakers4/silero-models", model="silero_tts",
@@ -79,23 +84,27 @@ def synth_wav(text: str, voice: str) -> bytes:
     return buf.getvalue()
 
 
-def espeak_wav(text: str, voice: str = "ru") -> bytes:
-    """Fallback for exotic input Silero chokes on (same as synth_audio.py)."""
-    p1 = subprocess.Popen(
-        ["espeak-ng", "-v", voice, "-s", "175", "--stdout", speakable(text)],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    )
+def piper_wav(text: str) -> bytes:
+    """Synthesize Russian speech with the locally loaded neural fallback."""
+    native = io.BytesIO()
+    with _lock, wave.open(native, "wb") as w:
+        _piper.synthesize_wav(speakable(text), w)
     out = subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", "pipe:0",
+        ["ffmpeg", "-v", "error", "-i", "pipe:0",
          "-ar", str(OUT_RATE), "-ac", "1", "-c:a", "pcm_s16le",
-         "-f", "wav", "pipe:1"],
-        stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+         "-f", "s16le", "pipe:1"],
+        input=native.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         check=False,
     )
-    p1.wait()
     if out.returncode != 0 or not out.stdout:
-        raise RuntimeError(f"espeak fallback failed: {text[:40]!r}")
-    return out.stdout
+        raise RuntimeError("Piper fallback failed")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(OUT_RATE)
+        w.writeframes(out.stdout)
+    return buf.getvalue()
 
 
 class H(BaseHTTPRequestHandler):
@@ -149,7 +158,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 body = synth_wav(text, voice)
             except Exception:  # noqa: BLE001 — silero рвётся на экзотике
-                body = espeak_wav(text)
+                body = piper_wav(text)
         except Exception as e:  # noqa: BLE001 — 500 с текстом без PII
             err = json.dumps({"error": f"synth failed: {str(e)[:100]}"}).encode()
             self._send(err, 500, "application/json")

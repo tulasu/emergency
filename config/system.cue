@@ -58,8 +58,9 @@ import "strings"
 
 config: #Config
 
-_caddyfile: "\(strings.TrimSuffix(config.root, "/"))/etc/caddy/Caddyfile"
-_catalog:   "\(strings.TrimSuffix(config.root, "/"))/etc/traineebox/catalog"
+_caddyfile:         "\(strings.TrimSuffix(config.root, "/"))/etc/caddy/Caddyfile"
+_catalog:           "\(strings.TrimSuffix(config.root, "/"))/etc/traineebox/catalog"
+_audioDatabaseURL: "postgres://\(config.audio.postgres.user):\(config.audio.postgres.password)@audio-postgres:5432/\(config.audio.postgres.database)?sslmode=disable"
 
 _llmBackendsEnv: "[" + strings.Join([ for b in config.ticketgen.llm.backends {
 	#"{"name":"\#(b.name)","url":"\#(b.url)","model":"\#(b.model)","priority":\#(b.priority),"timeout":\#(b.timeout)}"#
@@ -251,28 +252,44 @@ compose: {
 			}
 			restart: "unless-stopped"
 		}
+		"audio-migrate": {
+			build: {
+				context:    "."
+				dockerfile: "audio/Dockerfile"
+			}
+			command: ["/app/audio", "migrate", "up"]
+			depends_on: {
+				"audio-postgres": {
+					condition: "service_healthy"
+				}
+			}
+			environment: {
+				AUDIO_DATABASE_URL: _audioDatabaseURL
+			}
+			restart: "no"
+		}
 		audio: {
 			build: {
 				context:    "."
 				dockerfile: "audio/Dockerfile"
 			}
 			depends_on: {
-				"audio-postgres": {
-					condition: "service_healthy"
+				"audio-migrate": {
+					condition: "service_completed_successfully"
 				}
 			}
 			ports: ["8002:8002"]
 			environment: {
-				AUDIO_HTTP_ADDR:    ":8002"
-				AUDIO_DATABASE_URL: "postgres://\(config.audio.postgres.user):\(config.audio.postgres.password)@audio-postgres:5432/\(config.audio.postgres.database)?sslmode=disable"
-				AUDIO_S3_ENDPOINT:  "http://rustfs:9000"
-				AUDIO_S3_BUCKET:    "emergency-audio"
-				AUDIO_S3_KEY:       config.audio.s3.access_key
-				AUDIO_S3_SECRET:    config.audio.s3.secret_key
-				AUDIO_VOICE:        config.audio.voice
-				AUDIO_RATE:         "\(config.audio.rate)"
-				AUDIO_SYNTH_URL:    "http://audio-synth:8003"
-				AUDIO_SWEEP_MINUTES: "\(config.audio.sweep_minutes)"
+				AUDIO_HTTP_ADDR:       ":8002"
+				AUDIO_DATABASE_URL:    _audioDatabaseURL
+				AUDIO_S3_ENDPOINT:     "http://rustfs:9000"
+				AUDIO_S3_BUCKET:       "emergency-audio"
+				AUDIO_S3_KEY:          config.audio.s3.access_key
+				AUDIO_S3_SECRET:       config.audio.s3.secret_key
+				AUDIO_VOICE:           config.audio.voice
+				AUDIO_RATE:            "\(config.audio.rate)"
+				AUDIO_SYNTH_URL:       "http://audio-synth:8003"
+				AUDIO_SWEEP_MINUTES:   "\(config.audio.sweep_minutes)m"
 				INTERNAL_SERVICE_TOKEN: config.service_token
 			}
 			restart: "unless-stopped"
@@ -283,7 +300,6 @@ compose: {
 				dockerfile: "audio-synth/Dockerfile"
 			}
 			gpus: "all"
-			ports: ["8003:8003"]
 			environment: {
 				SYNTH_PORT:   "8003"
 				SYNTH_DEVICE: config.audio.synth_device

@@ -25,7 +25,6 @@ type Config struct {
 	InternalToken      string
 	SweepInterval      time.Duration
 	SweepLimit         int
-	WorkerBatch        int
 	WorkerPollInterval time.Duration
 	WorkerSynthTimeout time.Duration
 	// PauseWorker stops the synth queue worker (offline/CPU mode per spec 06).
@@ -81,7 +80,6 @@ func Load() (Config, error) {
 		InternalToken:      os.Getenv("INTERNAL_SERVICE_TOKEN"),
 		SweepInterval:      getdur("AUDIO_SWEEP_MINUTES", 10*time.Minute),
 		SweepLimit:         getint("AUDIO_SWEEP_LIMIT", 500),
-		WorkerBatch:        getint("AUDIO_WORKER_BATCH", 10),
 		WorkerPollInterval: getdur("AUDIO_WORKER_POLL_SECONDS", 2*time.Second),
 		WorkerSynthTimeout: getdur("AUDIO_WORKER_SYNTH_TIMEOUT_SECONDS", 60*time.Second),
 		PauseWorker:        strings.TrimSpace(os.Getenv("AUDIO_WORKER_PAUSED")) == "1",

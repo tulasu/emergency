@@ -4,8 +4,11 @@ speakable parity is checked against dispatcher/tools/synth_audio.py by
 exec of the pure function slice (no dispatcher import, no deps).
 """
 import importlib.util
+import io
+import shutil
 import sys
 import unittest
+import wave
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
@@ -51,6 +54,22 @@ class AppContractTest(unittest.TestCase):
 
         self.assertIn("kseniya", app.VOICES)
         self.assertEqual(app.OUT_RATE, 8000)
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
+    def test_neural_russian_fallback_produces_sized_pcm_wav(self):
+        import app
+
+        if not Path(app.PIPER_MODEL_PATH).is_file():
+            self.skipTest("Piper Russian model not installed")
+        from piper import PiperVoice
+
+        app._piper = PiperVoice.load(app.PIPER_MODEL_PATH)
+        data = app.piper_wav("Алло. Подскажите ваш адрес.")
+        with wave.open(io.BytesIO(data), "rb") as wav:
+            self.assertEqual((wav.getnchannels(), wav.getframerate(),
+                              wav.getsampwidth()), (1, 8000, 2))
+            self.assertGreater(wav.getnframes(), 0)
+            self.assertEqual(len(data), 44 + wav.getnframes() * 2)
 
 
 if __name__ == "__main__":

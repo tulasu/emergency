@@ -1,15 +1,7 @@
-// Package worker owns the synth queue and the sweep cron (spec 06).
-// Loop shape mirrors traineebox generation worker: claim batch via
-// FOR UPDATE SKIP LOCKED, idle poll, redact PII in errors. Singleflight
-// per hash comes free from the synth_queue PK.
+// Package worker drives the audio synthesis queue and orphan sweep.
 package worker
 
 import (
-	"context"
-	"log"
-	"regexp"
-	"time"
-
 	"audio/internal/config"
 	"audio/internal/hash"
 	"audio/internal/s3"
@@ -17,6 +9,11 @@ import (
 	"audio/internal/store"
 	"audio/internal/synth"
 	"audio/internal/wav"
+	"context"
+	"errors"
+	"log"
+	"regexp"
+	"time"
 )
 
 // piiDigits masks phone-like runs so texts never land in logs unredacted
@@ -49,7 +46,7 @@ func New(cfg config.Config, st *store.Store, s3c *s3.Client, sc *synth.Client, s
 	return &Worker{cfg: cfg, store: st, s3: s3c, synth: sc, stats: stt}
 }
 
-// Loop claims batches until ctx stops. Paused only in offline/CPU mode
+// Loop claims jobs until ctx stops. Paused only in offline/CPU mode
 // (spec 06: orchestrator off under load); sweeps keep running separately.
 func (w *Worker) Loop(ctx context.Context) {
 	if w.cfg.PauseWorker {
@@ -76,9 +73,9 @@ func (w *Worker) Loop(ctx context.Context) {
 	}
 }
 
-// DriveOnce claims one batch and synthesizes it. No work → (false, nil).
+// DriveOnce claims one job and synthesizes it. No work → (false, nil).
 func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
-	items, err := w.store.Claim(ctx, w.cfg.WorkerBatch)
+	items, err := w.store.Claim(ctx, 1)
 	if err != nil {
 		return true, err
 	}
@@ -88,7 +85,7 @@ func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
 	for _, it := range items {
 		start := time.Now()
 		sctx, cancel := context.WithTimeout(ctx, w.cfg.WorkerSynthTimeout)
-		wavBytes, err := w.synth.Synth(sctx, it.Text, w.cfg.Voice)
+		wavBytes, err := w.synth.Synth(sctx, it.Text, it.Voice)
 		cancel()
 		if err != nil {
 			_ = w.store.FailItem(ctx, it, "synth failed: "+trunc(redact(err.Error()), 200))
@@ -99,12 +96,15 @@ func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
 			_ = w.store.FailItem(ctx, it, "bad wav: "+trunc(redact(err.Error()), 200))
 			continue
 		}
-		key := hash.S3Key(w.cfg.Voice, w.cfg.Rate, hash.Hex(it.Hash))
+		key := hash.S3Key(it.Voice, w.cfg.Rate, hash.Hex(it.Hash))
 		if err := w.s3.Put(ctx, key, wavBytes); err != nil {
 			_ = w.store.FailItem(ctx, it, "s3 put failed: "+trunc(redact(err.Error()), 200))
 			continue
 		}
-		if err := w.store.FinishItem(ctx, it, w.cfg.Voice, w.cfg.Rate, info.Bytes, info.DurS); err != nil {
+		if err := w.store.FinishItem(ctx, it, w.cfg.Rate, info.Bytes, info.DurS); err != nil {
+			if errors.Is(err, store.ErrClaimLost) {
+				continue
+			}
 			_ = w.store.FailItem(ctx, it, "db finish failed: "+trunc(redact(err.Error()), 200))
 			continue
 		}
@@ -142,28 +142,17 @@ func (s *Sweeper) Loop(ctx context.Context) {
 	}
 }
 
-// Once runs one bounded sweep pass.
+// Once runs one bounded sweep pass, keeping each blob locked through S3 deletion.
 func (s *Sweeper) Once(ctx context.Context) error {
-	orphans, err := s.store.SweepOrphans(ctx, 7*24*time.Hour, s.cfg.SweepLimit)
+	n, bytes, err := s.store.SweepOrphans(ctx, 7*24*time.Hour, s.cfg.SweepLimit,
+		func(ctx context.Context, o store.Orphan) error {
+			return s.s3.Delete(ctx, hash.S3Key(o.Voice, o.Rate, hash.Hex(o.Hash)))
+		})
 	if err != nil {
 		return err
 	}
-	done := [][32]byte{}
-	var bytes int64
-	for _, o := range orphans {
-		if err := s.s3.Delete(ctx, hash.S3Key(o.Voice, o.Rate, hash.Hex(o.Hash))); err != nil {
-			continue
-		}
-		done = append(done, o.Hash)
-		bytes += int64(o.Bytes)
+	if n > 0 {
+		log.Printf("audio sweep: deleted_blobs=%d deleted_bytes=%d", n, bytes)
 	}
-	if len(done) == 0 {
-		return nil
-	}
-	n, err := s.store.DeleteBlobs(ctx, done)
-	if err != nil {
-		return err
-	}
-	log.Printf("audio sweep: deleted_blobs=%d deleted_bytes=%d", n, bytes)
 	return nil
 }

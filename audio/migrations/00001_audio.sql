@@ -6,7 +6,7 @@ CREATE TABLE blobs (
     bytes INT NOT NULL,
     dur_s REAL NOT NULL,
     refcount INT NOT NULL DEFAULT 0 CHECK (refcount >= 0),
-    unreferenced_since TIMESTAMPTZ,
+    unreferenced_since TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX blobs_orphan_idx ON blobs (unreferenced_since) WHERE refcount = 0;
@@ -32,8 +32,12 @@ CREATE TABLE synth_queue (
     hash BYTEA PRIMARY KEY,
     ticket_id UUID NOT NULL,
     frag_id TEXT NOT NULL,
+    voice TEXT NOT NULL,
     text TEXT NOT NULL,
     attempts INT NOT NULL DEFAULT 0,
+    claim_token UUID,
+    claim_until TIMESTAMPTZ,
+    error TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -44,10 +48,7 @@ BEGIN
         UPDATE blobs
            SET refcount = refcount + 1,
                unreferenced_since = NULL
-         WHERE hash = NEW.hash AND refcount = 0;
-        UPDATE blobs
-           SET refcount = refcount + 1
-         WHERE hash = NEW.hash AND refcount > 0;
+         WHERE hash = NEW.hash;
         RETURN NEW;
     END IF;
     UPDATE blobs

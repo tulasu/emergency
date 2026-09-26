@@ -22,6 +22,9 @@ import (
 // ErrNotFound maps to 404, never an accidental 500.
 var ErrNotFound = errors.New("not found")
 
+// ErrClaimLost reports a stale worker lease; it must not be failed again.
+var ErrClaimLost = errors.New("synthesis claim lost")
+
 // Manifest is the read-only {frag_id: hex(hash)} cache for dialog open.
 type Manifest struct {
 	TicketID  uuid.UUID
@@ -33,13 +36,15 @@ type Manifest struct {
 	UpdatedAt time.Time
 }
 
-// QueueItem is one claimed synth job.
+// QueueItem is one exclusively claimed synth job.
 type QueueItem struct {
-	Hash     [32]byte
-	TicketID uuid.UUID
-	FragID   string
-	Text     string
-	Attempts int
+	Hash       [32]byte
+	TicketID   uuid.UUID
+	FragID     string
+	Voice      string
+	Text       string
+	Attempts   int
+	ClaimToken uuid.UUID
 }
 
 // Orphan is a sweep candidate with the fields needed for the S3 key.
@@ -61,8 +66,8 @@ func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 func hexOf(sum [32]byte) string { return hex.EncodeToString(sum[:]) }
 
 // Ensure upserts the manifest + refs for existing blobs + queue for missing.
-// Idempotent: stored digest == digest returns current status + missing with
-// no writes. matched reports the digest hit (caller maps ready→200).
+// Idempotent: stored digest and voice match returns current status + missing
+// with no writes. matched reports the cache hit (caller maps ready→200).
 func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice string, frags []enumerate.Fragment, hashes [][32]byte) (status string, missing []string, matched bool, err error) {
 	fragMap := make(map[string]string, len(frags))
 	newHashes := make([][]byte, len(hashes))
@@ -83,9 +88,9 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var storedDigest, storedStatus string
-	err = tx.QueryRow(ctx, `SELECT scenario_digest, status FROM manifests WHERE ticket_id = $1`, ticketID).Scan(&storedDigest, &storedStatus)
-	if err == nil && storedDigest == digest {
+	var storedDigest, storedStatus, storedVoice string
+	err = tx.QueryRow(ctx, `SELECT scenario_digest, status, voice FROM manifests WHERE ticket_id = $1`, ticketID).Scan(&storedDigest, &storedStatus, &storedVoice)
+	if err == nil && storedDigest == digest && storedVoice == voice {
 		m, err := s.missingLocked(ctx, tx, ticketID)
 		if err != nil {
 			return "", nil, false, err
@@ -99,10 +104,8 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 		return "", nil, false, err
 	}
 
-	if len(newHashes) > 0 {
-		if _, err := tx.Exec(ctx, `DELETE FROM refs WHERE ticket_id = $1 AND hash <> ALL($2)`, ticketID, newHashes); err != nil {
-			return "", nil, false, fmt.Errorf("drop stale refs: %w", err)
-		}
+	if _, err := tx.Exec(ctx, `DELETE FROM refs WHERE ticket_id = $1 AND hash <> ALL($2)`, ticketID, newHashes); err != nil {
+		return "", nil, false, fmt.Errorf("drop stale refs: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO manifests (ticket_id, scenario_digest, voice, status, fragments, error, updated_at)
@@ -116,6 +119,19 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 		return "", nil, false, fmt.Errorf("upsert manifest: %w", err)
 	}
 	if len(newHashes) > 0 {
+		// Lock reusable blobs through the ref insert, so a concurrent sweep
+		// cannot delete S3 after this transaction decides a blob is available.
+		locked, err := tx.Query(ctx, `SELECT hash FROM blobs WHERE hash = ANY($1) FOR KEY SHARE`, newHashes)
+		if err != nil {
+			return "", nil, false, fmt.Errorf("lock reusable blobs: %w", err)
+		}
+		for locked.Next() {
+		}
+		if err := locked.Err(); err != nil {
+			locked.Close()
+			return "", nil, false, fmt.Errorf("lock reusable blobs: %w", err)
+		}
+		locked.Close()
 		// Refs only for blobs already stored (FK RESTRICT); the rest queue.
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO refs (ticket_id, hash)
@@ -131,10 +147,10 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 			texts[i] = f.Text
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO synth_queue (hash, ticket_id, frag_id, text)
-			SELECT h, $2, f, t FROM unnest($1::bytea[], $3::text[], $4::text[]) AS u(h, f, t)
+			INSERT INTO synth_queue (hash, ticket_id, frag_id, voice, text)
+			SELECT h, $2, f, $3, t FROM unnest($1::bytea[], $4::text[], $5::text[]) AS u(h, f, t)
 			WHERE NOT EXISTS (SELECT 1 FROM blobs WHERE hash = h)
-			ON CONFLICT DO NOTHING`, newHashes, ticketID, fragIDs, texts); err != nil {
+			ON CONFLICT DO NOTHING`, newHashes, ticketID, voice, fragIDs, texts); err != nil {
 			return "", nil, false, fmt.Errorf("enqueue: %w", err)
 		}
 	}
@@ -151,10 +167,16 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 		}
 		return "ready", nil, false, nil
 	}
+	if err := s.recomputeLocked(ctx, tx, ticketID); err != nil {
+		return "", nil, false, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT status FROM manifests WHERE ticket_id = $1`, ticketID).Scan(&status); err != nil {
+		return "", nil, false, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", nil, false, err
 	}
-	return "pending", m, false, nil
+	return status, m, false, nil
 }
 
 // missingLocked lists fragment hexes with no blob row (caller holds tx).
@@ -239,45 +261,98 @@ func (s *Store) DeleteTicket(ctx context.Context, ticketID uuid.UUID) (int64, er
 	return res.RowsAffected(), nil
 }
 
-// Claim takes up to batch queue rows (attempts<3), bumping attempts upfront
-// as the lease: a crashed worker's item retries, at most 3 total.
+const expiredLeaseError = "synthesis lease expired"
+
+// recoverExpiredLocked poisons terminal leases whose workers died. It runs
+// before each claim so no manifest can remain pending after its final lease.
+func (s *Store) recoverExpiredLocked(ctx context.Context, tx pgx.Tx, limit int) error {
+	rows, err := tx.Query(ctx, `
+		SELECT hash FROM synth_queue
+		WHERE attempts >= 3 AND claim_until < now() AND error = ''
+		ORDER BY claim_until LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
+	if err != nil {
+		return err
+	}
+	expired := [][32]byte{}
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			rows.Close()
+			return err
+		}
+		var sum [32]byte
+		copy(sum[:], raw)
+		expired = append(expired, sum)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, sum := range expired {
+		if _, err := tx.Exec(ctx, `
+			UPDATE synth_queue
+			SET claim_token = NULL, claim_until = NULL, error = $2
+			WHERE hash = $1 AND attempts >= 3 AND claim_until < now() AND error = ''`, sum[:], expiredLeaseError); err != nil {
+			return err
+		}
+		ids, err := s.affectedManifestIDs(ctx, tx, sum)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := s.recomputeLocked(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Claim takes up to batch unclaimed or expired queue rows. A claim token
+// fences stale workers; the ten-minute lease exceeds one bounded worker pass.
 func (s *Store) Claim(ctx context.Context, batch int) ([]QueueItem, error) {
+	if batch <= 0 {
+		return nil, nil
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := s.recoverExpiredLocked(ctx, tx, batch); err != nil {
+		return nil, err
+	}
 	rows, err := tx.Query(ctx, `
-		SELECT hash, ticket_id, frag_id, text, attempts FROM synth_queue
-		WHERE attempts < 3 ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED`, batch)
+		SELECT hash, ticket_id, frag_id, voice, text, attempts FROM synth_queue
+		WHERE attempts < 3 AND (claim_until IS NULL OR claim_until < now())
+		ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED`, batch)
 	if err != nil {
 		return nil, err
 	}
 	items := []QueueItem{}
-	var raws [][]byte
 	for rows.Next() {
 		var it QueueItem
-		var h []byte
-		if err := rows.Scan(&h, &it.TicketID, &it.FragID, &it.Text, &it.Attempts); err != nil {
+		var raw []byte
+		if err := rows.Scan(&raw, &it.TicketID, &it.FragID, &it.Voice, &it.Text, &it.Attempts); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		copy(it.Hash[:], h)
+		copy(it.Hash[:], raw)
 		items = append(items, it)
-		raws = append(raws, h)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(items) == 0 {
-		_ = tx.Commit(ctx)
-		return nil, nil
-	}
-	if _, err := tx.Exec(ctx, `UPDATE synth_queue SET attempts = attempts + 1 WHERE hash = ANY($1)`, raws); err != nil {
-		return nil, err
-	}
 	for i := range items {
+		items[i].ClaimToken = uuid.New()
+		if _, err := tx.Exec(ctx, `
+			UPDATE synth_queue
+			SET attempts = attempts + 1, claim_token = $2,
+			    claim_until = now() + interval '10 minutes'
+			WHERE hash = $1`, items[i].Hash[:], items[i].ClaimToken); err != nil {
+			return nil, err
+		}
 		items[i].Attempts++
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -286,159 +361,157 @@ func (s *Store) Claim(ctx context.Context, batch int) ([]QueueItem, error) {
 	return items, nil
 }
 
-// FinishItem stores the blob, backfills refs for every non-ready manifest
-// pointing at the hash (owner + dedup sharers), drops the queue row and
-// recomputes affected manifest statuses. Idempotent via ON CONFLICT.
-func (s *Store) FinishItem(ctx context.Context, item QueueItem, voice string, rate, bytes int, durS float64) error {
-	raw := make([]byte, 32)
-	copy(raw, item.Hash[:])
-	hexDigest := hexOf(item.Hash)
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
+// claimLocked locks and verifies a queue item before a terminal operation.
+func claimLocked(ctx context.Context, tx pgx.Tx, item QueueItem) (int, error) {
+	var attempts int
+	err := tx.QueryRow(ctx, `
+		SELECT attempts FROM synth_queue
+		WHERE hash = $1 AND claim_token = $2 AND claim_until > now() FOR UPDATE`, item.Hash[:], item.ClaimToken).Scan(&attempts)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrClaimLost
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO blobs (hash, voice, rate, bytes, dur_s) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT DO NOTHING`, raw, voice, rate, bytes, durS); err != nil {
-		return fmt.Errorf("insert blob: %w", err)
-	}
-	rows, err := tx.Query(ctx, `
-		INSERT INTO refs (ticket_id, hash)
-		SELECT m.ticket_id, $1 FROM manifests m
-		WHERE m.status IN ('pending', 'partial', 'error')
-		  AND EXISTS (SELECT 1 FROM jsonb_each_text(m.fragments) e WHERE e.value = $2)
-		ON CONFLICT DO NOTHING RETURNING ticket_id`, raw, hexDigest)
-	if err != nil {
-		return fmt.Errorf("backfill refs: %w", err)
-	}
-	affected := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		affected = append(affected, id)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM synth_queue WHERE hash = $1`, raw); err != nil {
-		return fmt.Errorf("dequeue: %w", err)
-	}
-	for _, id := range affected {
-		if err := s.recomputeLocked(ctx, tx, id, ""); err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
+	return attempts, err
 }
 
-// FailItem records a synth/s3/wav failure. attempts was already bumped by
-// Claim; at >=3 the item is poisoned: manifests referencing it go error with
-// redacted text. If the blob actually made it (S3 ok, DB failed), finish instead.
-func (s *Store) FailItem(ctx context.Context, item QueueItem, redactedErr string) error {
-	raw := make([]byte, 32)
-	copy(raw, item.Hash[:])
-	var n int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM blobs WHERE hash = $1`, raw).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		// Blob stored despite the error path — finish, don't poison.
-		tx, err := s.pool.Begin(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-		if _, err := tx.Exec(ctx, `DELETE FROM synth_queue WHERE hash = $1`, raw); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `SELECT ticket_id FROM manifests WHERE status IN ('pending','partial')`)
-		if err != nil {
-			return err
-		}
-		var ids []uuid.UUID
-		for rows.Next() {
-			var id uuid.UUID
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return err
-			}
-			ids = append(ids, id)
-		}
-		rows.Close()
-		for _, id := range ids {
-			if err := s.recomputeLocked(ctx, tx, id, ""); err != nil {
-				return err
-			}
-		}
-		return tx.Commit(ctx)
-	}
-	if item.Attempts < 3 {
-		return nil // stays queued for retry
-	}
-	tx, err := s.pool.Begin(ctx)
+func (s *Store) affectedManifestIDs(ctx context.Context, tx pgx.Tx, sum [32]byte) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT ticket_id FROM manifests
+		WHERE EXISTS (SELECT 1 FROM jsonb_each_text(fragments) e WHERE e.value = $1)`, hexOf(sum))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	hexDigest := hexOf(item.Hash)
-	rows, err := tx.Query(ctx, `SELECT ticket_id FROM manifests WHERE status IN ('pending', 'partial')`)
-	if err != nil {
-		return err
-	}
-	var ids []uuid.UUID
+	defer rows.Close()
+	ids := []uuid.UUID{}
 	for rows.Next() {
 		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	return ids, rows.Err()
+}
+
+func (s *Store) finishLocked(ctx context.Context, tx pgx.Tx, item QueueItem, rate, bytes int, durS float64) error {
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO blobs (hash, voice, rate, bytes, dur_s) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT DO NOTHING`, item.Hash[:], item.Voice, rate, bytes, durS); err != nil {
+		return fmt.Errorf("insert blob: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO refs (ticket_id, hash)
+		SELECT m.ticket_id, $1 FROM manifests m
+		WHERE EXISTS (SELECT 1 FROM jsonb_each_text(m.fragments) e WHERE e.value = $2)
+		ON CONFLICT DO NOTHING`, item.Hash[:], hexOf(item.Hash)); err != nil {
+		return fmt.Errorf("backfill refs: %w", err)
+	}
+	res, err := tx.Exec(ctx, `DELETE FROM synth_queue WHERE hash = $1 AND claim_token = $2`, item.Hash[:], item.ClaimToken)
+	if err != nil {
+		return fmt.Errorf("dequeue: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrClaimLost
+	}
+	ids, err := s.affectedManifestIDs(ctx, tx, item.Hash)
+	if err != nil {
 		return err
 	}
 	for _, id := range ids {
-		var found int
-		if err := tx.QueryRow(ctx, `
-			SELECT count(*) FROM manifests m, jsonb_each_text(m.fragments) e
-			WHERE m.ticket_id = $1 AND e.value = $2`, id, hexDigest).Scan(&found); err != nil {
+		if err := s.recomputeLocked(ctx, tx, id); err != nil {
 			return err
 		}
-		if found == 0 {
-			continue
+	}
+	return nil
+}
+
+// FinishItem stores the claimed blob, backfills every referring manifest, and
+// releases the exclusive queue claim by removing it.
+func (s *Store) FinishItem(ctx context.Context, item QueueItem, rate, bytes int, durS float64) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := claimLocked(ctx, tx, item); err != nil {
+		return err
+	}
+	if err := s.finishLocked(ctx, tx, item, rate, bytes, durS); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// FailItem releases a matching failed lease for retry. The third failure is
+// poisoned with its redacted text; recomputation reads that persisted text.
+func (s *Store) FailItem(ctx context.Context, item QueueItem, redactedErr string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	attempts, err := claimLocked(ctx, tx, item)
+	if err != nil {
+		return err
+	}
+	var blobExists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM blobs WHERE hash = $1)`, item.Hash[:]).Scan(&blobExists); err != nil {
+		return err
+	}
+	if blobExists {
+		if err := s.finishLocked(ctx, tx, item, 0, 0, 0); err != nil {
+			return err
 		}
-		if err := s.recomputeLocked(ctx, tx, id, redactedErr); err != nil {
+		return tx.Commit(ctx)
+	}
+	if attempts < 3 {
+		_, err := tx.Exec(ctx, `
+			UPDATE synth_queue SET claim_token = NULL, claim_until = NULL
+			WHERE hash = $1 AND claim_token = $2`, item.Hash[:], item.ClaimToken)
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE synth_queue SET claim_token = NULL, claim_until = NULL, error = $3
+		WHERE hash = $1 AND claim_token = $2`, item.Hash[:], item.ClaimToken, redactedErr); err != nil {
+		return err
+	}
+	ids, err := s.affectedManifestIDs(ctx, tx, item.Hash)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.recomputeLocked(ctx, tx, id); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
 }
 
-// recomputeLocked sets manifest status from stored blobs: poisoned queue row
-// (attempts>=3, any owner) → error, else missing blobs → pending, else ready.
-func (s *Store) recomputeLocked(ctx context.Context, tx pgx.Tx, ticketID uuid.UUID, redactedErr string) error {
-	var missing, poisoned int
+// recomputeLocked sets manifest status from stored blobs. Poison status and
+// text are owned by synth_queue so later Ensure calls remain idempotent.
+func (s *Store) recomputeLocked(ctx context.Context, tx pgx.Tx, ticketID uuid.UUID) error {
+	var missing int
+	var poisoned bool
+	var poisonErr string
 	if err := tx.QueryRow(ctx, `
 		WITH frags AS (
 			SELECT e.value AS h FROM manifests m, jsonb_each_text(m.fragments) e WHERE m.ticket_id = $1
 		)
 		SELECT
 			(SELECT count(*) FROM frags f WHERE NOT EXISTS (SELECT 1 FROM blobs b WHERE b.hash = decode(f.h, 'hex'))),
-			(SELECT count(*) FROM frags f WHERE EXISTS (SELECT 1 FROM synth_queue q WHERE encode(q.hash, 'hex') = f.h AND q.attempts >= 3))`,
-		ticketID).Scan(&missing, &poisoned); err != nil {
+			EXISTS (SELECT 1 FROM frags f JOIN synth_queue q ON encode(q.hash, 'hex') = f.h WHERE q.attempts >= 3 AND q.claim_token IS NULL),
+			COALESCE((
+				SELECT q.error FROM frags f JOIN synth_queue q ON encode(q.hash, 'hex') = f.h
+				WHERE q.attempts >= 3 AND q.claim_token IS NULL ORDER BY q.created_at LIMIT 1
+			), '')`, ticketID).Scan(&missing, &poisoned, &poisonErr); err != nil {
 		return err
 	}
-	status := "ready"
-	errText := ""
+	status, errText := "ready", ""
 	switch {
-	case poisoned > 0:
-		status, errText = "error", redactedErr
+	case poisoned:
+		status, errText = "error", poisonErr
 	case missing > 0:
 		status = "pending"
 	}
@@ -447,42 +520,56 @@ func (s *Store) recomputeLocked(ctx context.Context, tx pgx.Tx, ticketID uuid.UU
 	return err
 }
 
-// SweepOrphans selects up to limit blobs past TTL for S3-first deletion.
-func (s *Store) SweepOrphans(ctx context.Context, ttl time.Duration, limit int) ([]Orphan, error) {
-	rows, err := s.pool.Query(ctx, `
+// SweepOrphans calls remove and deletes each successful candidate while its
+// row lock is held. This prevents a new ref from racing S3-first deletion.
+func (s *Store) SweepOrphans(ctx context.Context, ttl time.Duration, limit int, remove func(context.Context, Orphan) error) (deleted, bytes int64, err error) {
+	if limit <= 0 {
+		return 0, 0, nil
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, `
 		SELECT hash, voice, rate, bytes FROM blobs
 		WHERE refcount = 0 AND unreferenced_since < now() - make_interval(secs => $1)
-		LIMIT $2 FOR UPDATE SKIP LOCKED`, ttl.Seconds(), limit)
+		ORDER BY unreferenced_since LIMIT $2 FOR UPDATE SKIP LOCKED`, ttl.Seconds(), limit)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
-	defer rows.Close()
-	out := []Orphan{}
+	orphans := []Orphan{}
 	for rows.Next() {
 		var o Orphan
-		var h []byte
-		if err := rows.Scan(&h, &o.Voice, &o.Rate, &o.Bytes); err != nil {
-			return nil, err
+		var raw []byte
+		if err := rows.Scan(&raw, &o.Voice, &o.Rate, &o.Bytes); err != nil {
+			rows.Close()
+			return 0, 0, err
 		}
-		copy(o.Hash[:], h)
-		out = append(out, o)
+		copy(o.Hash[:], raw)
+		orphans = append(orphans, o)
 	}
-	return out, rows.Err()
-}
-
-// DeleteBlobs removes blob rows after their S3 keys are gone.
-func (s *Store) DeleteBlobs(ctx context.Context, hashes [][32]byte) (int64, error) {
-	if len(hashes) == 0 {
-		return 0, nil
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
 	}
-	raws := make([][]byte, len(hashes))
-	for i, h := range hashes {
-		b := make([]byte, 32)
-		copy(b, h[:])
-		raws[i] = b
+	for _, o := range orphans {
+		if err := remove(ctx, o); err != nil {
+			continue
+		}
+		res, err := tx.Exec(ctx, `DELETE FROM blobs WHERE hash = $1 AND refcount = 0`, o.Hash[:])
+		if err != nil {
+			return 0, 0, err
+		}
+		if res.RowsAffected() == 1 {
+			deleted++
+			bytes += int64(o.Bytes)
+		}
 	}
-	res, err := s.pool.Exec(ctx, `DELETE FROM blobs WHERE hash = ANY($1)`, raws)
-	return res.RowsAffected(), err
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, err
+	}
+	return deleted, bytes, nil
 }
 
 // Counts serves /health: queue depth, blobs, refs.

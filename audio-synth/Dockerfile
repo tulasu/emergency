@@ -3,14 +3,15 @@
 # driver is injected by the NVIDIA container toolkit (gpus: all in compose).
 FROM python:3.12-slim
 WORKDIR /app
-# espeak-ng + ffmpeg: fallback for exotic input Silero chokes on.
+# ffmpeg converts the bundled Russian neural fallback to telephony PCM.
 # gcc + libc6-dev: torchaudio build deps on slim.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    espeak-ng ffmpeg gcc libc6-dev curl \
+    ffmpeg gcc libc6-dev curl \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu130 \
     "torch==2.14.0" "torchaudio==2.14.0"
-RUN pip install --no-cache-dir "numpy>=2.0"
+RUN pip install --no-cache-dir "numpy>=2.0" "piper-tts==1.6.1"
+RUN python -m piper.download_voices --download-dir /opt/piper ru_RU-denis-medium
 COPY audio-synth/ ./
 ENV PYTHONUNBUFFERED=1 \
     SYNTH_PORT=8003 \

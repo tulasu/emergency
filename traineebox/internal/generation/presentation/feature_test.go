@@ -24,20 +24,11 @@ func TestGenerationJobApproveFlow(t *testing.T) {
 	ownerToken := genLogin(t, handler, "genowner", "password1")
 	studentToken := genLogin(t, handler, "genstud", "password1")
 
-	createGroup := genDo(t, handler, http.MethodPost, "/groups", ownerToken, map[string]string{"name": "Gen"})
-	mustGenOK(t, createGroup)
-	var group struct {
-		ID string `json:"id"`
-	}
-	mustGenDecode(t, createGroup.Body, &group)
-
+	topic, variant := seedCurriculum(t, handler, ownerToken)
 	studentID := mustGenFindLogin(t, handler, studentToken)
-	mustGenOK(t, genDo(t, handler, http.MethodPost, "/groups/"+group.ID+"/members", ownerToken, map[string]string{
-		"user_id": studentID, "role": "student",
-	}))
 
-	createJob := genDo(t, handler, http.MethodPost, "/groups/"+group.ID+"/generation-jobs", ownerToken, map[string]string{
-		"prompt": "пожар",
+	createJob := genDo(t, handler, http.MethodPost, "/variants/"+variant+"/generation-jobs", ownerToken, map[string]any{
+		"prompt": "пожар", "topic_id": topic,
 	})
 	mustGenOK(t, createJob)
 	var job struct {
@@ -50,8 +41,8 @@ func TestGenerationJobApproveFlow(t *testing.T) {
 	}
 
 	// student cannot create
-	forbidden := genDo(t, handler, http.MethodPost, "/groups/"+group.ID+"/generation-jobs", studentToken, map[string]string{
-		"prompt": "x",
+	forbidden := genDo(t, handler, http.MethodPost, "/variants/"+variant+"/generation-jobs", studentToken, map[string]any{
+		"prompt": "x", "topic_id": topic,
 	})
 	if forbidden.StatusCode != http.StatusForbidden {
 		t.Fatalf("student create = %d", forbidden.StatusCode)
@@ -89,14 +80,20 @@ func TestGenerationJobApproveFlow(t *testing.T) {
 		t.Fatalf("approve = %+v", published)
 	}
 
-	start := genDo(t, handler, http.MethodPost, "/tickets/"+*published.PublishedTicketID+"/attempts", studentToken, nil)
+	grant := genDo(t, handler, http.MethodPost, "/users/"+studentID+"/attempts", ownerToken, map[string]string{"variant_id": variant})
+	mustGenOK(t, grant)
+	var granted struct {
+		ID string `json:"id"`
+	}
+	mustGenDecode(t, grant.Body, &granted)
+	start := genDo(t, handler, http.MethodPost, "/attempts/"+granted.ID+"/start", studentToken, nil)
 	mustGenOK(t, start)
 	var attempt struct {
 		ID string `json:"id"`
 	}
 	mustGenDecode(t, start.Body, &attempt)
 
-	save := genDo(t, handler, http.MethodPatch, "/attempts/"+attempt.ID+"/answer", studentToken, map[string]any{
+	save := genDo(t, handler, http.MethodPatch, "/attempts/"+attempt.ID+"/answers/"+*published.PublishedTicketID, studentToken, map[string]any{
 		"incident_type_code":   "101",
 		"tag_codes":            []string{"where_street", "street_flame_smoke", "burn_trash"},
 		"service_codes":        []string{"sluzhba_101"},
@@ -126,15 +123,10 @@ func TestGenerationJobRetryCancel(t *testing.T) {
 	_ = testkit.SeedUser(t, pool, "genowner2", "password1", "teacher")
 	ownerToken := genLogin(t, handler, "genowner2", "password1")
 
-	createGroup := genDo(t, handler, http.MethodPost, "/groups", ownerToken, map[string]string{"name": "Gen2"})
-	mustGenOK(t, createGroup)
-	var group struct {
-		ID string `json:"id"`
-	}
-	mustGenDecode(t, createGroup.Body, &group)
+	topic, variant := seedCurriculum(t, handler, ownerToken)
 
-	createJob := genDo(t, handler, http.MethodPost, "/groups/"+group.ID+"/generation-jobs", ownerToken, map[string]string{
-		"prompt": "дтп",
+	createJob := genDo(t, handler, http.MethodPost, "/variants/"+variant+"/generation-jobs", ownerToken, map[string]any{
+		"prompt": "дтп", "topic_id": topic,
 	})
 	mustGenOK(t, createJob)
 	var job struct {
@@ -166,6 +158,35 @@ func TestGenerationJobRetryCancel(t *testing.T) {
 
 	del := genDo(t, handler, http.MethodDelete, "/generation-jobs/"+job.ID, ownerToken, nil)
 	mustGenOK(t, del)
+}
+
+func seedCurriculum(t *testing.T, handler http.Handler, token string) (topicID, variantID string) {
+	t.Helper()
+	topic := genDo(t, handler, http.MethodPost, "/topics", token, map[string]string{"title": "Gen topic"})
+	mustGenOK(t, topic)
+	var topicBody struct {
+		ID string `json:"id"`
+	}
+	mustGenDecode(t, topic.Body, &topicBody)
+	module := genDo(t, handler, http.MethodPost, "/modules", token, map[string]any{"title": "Gen module", "description": ""})
+	mustGenOK(t, module)
+	var moduleBody struct {
+		ID string `json:"id"`
+	}
+	mustGenDecode(t, module.Body, &moduleBody)
+	lesson := genDo(t, handler, http.MethodPost, "/modules/"+moduleBody.ID+"/lessons", token, map[string]any{"title": "Gen lesson", "position": 0})
+	mustGenOK(t, lesson)
+	var lessonBody struct {
+		ID string `json:"id"`
+	}
+	mustGenDecode(t, lesson.Body, &lessonBody)
+	variant := genDo(t, handler, http.MethodPost, "/lessons/"+lessonBody.ID+"/variants", token, map[string]any{"title": "Gen variant", "position": 0})
+	mustGenOK(t, variant)
+	var variantBody struct {
+		ID string `json:"id"`
+	}
+	mustGenDecode(t, variant.Body, &variantBody)
+	return topicBody.ID, variantBody.ID
 }
 
 func seedReadyJob(t *testing.T, pool *pgxpool.Pool, jobID string) {

@@ -12,142 +12,109 @@ import (
 	"github.com/google/uuid"
 )
 
-const countFinishedAttempts = `-- name: CountFinishedAttempts :one
-SELECT count(*)::int AS count
-FROM ticket_attempts
-WHERE ticket_id = $1 AND user_id = $2 AND status IN ('submitted', 'timed_out')
-`
-
-type CountFinishedAttemptsParams struct {
-	TicketID uuid.UUID
-	UserID   uuid.UUID
-}
-
-func (q *Queries) CountFinishedAttempts(ctx context.Context, arg CountFinishedAttemptsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countFinishedAttempts, arg.TicketID, arg.UserID)
-	var count int32
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createAttempt = `-- name: CreateAttempt :exec
 INSERT INTO ticket_attempts (
-    id, ticket_id, user_id, attempt_no, status, started_at, deadline_at, finished_at, score
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    id, variant_id, user_id, granted_by, attempt_no, status,
+    started_at, deadline_at, finished_at, score, report
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type CreateAttemptParams struct {
 	ID         uuid.UUID
-	TicketID   uuid.UUID
+	VariantID  uuid.UUID
 	UserID     uuid.UUID
+	GrantedBy  uuid.UUID
 	AttemptNo  int32
 	Status     string
-	StartedAt  time.Time
+	StartedAt  *time.Time
 	DeadlineAt *time.Time
 	FinishedAt *time.Time
 	Score      *int16
+	Report     []byte
 }
 
 func (q *Queries) CreateAttempt(ctx context.Context, arg CreateAttemptParams) error {
 	_, err := q.db.Exec(ctx, createAttempt,
 		arg.ID,
-		arg.TicketID,
+		arg.VariantID,
 		arg.UserID,
+		arg.GrantedBy,
 		arg.AttemptNo,
 		arg.Status,
 		arg.StartedAt,
 		arg.DeadlineAt,
 		arg.FinishedAt,
 		arg.Score,
-	)
-	return err
-}
-
-const createAttemptAnswer = `-- name: CreateAttemptAnswer :exec
-INSERT INTO attempt_answers (
-    attempt_id, incident_type_code, applicant_last_name, applicant_first_name,
-    caller_number, dictated_number, notes, updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-`
-
-type CreateAttemptAnswerParams struct {
-	AttemptID          uuid.UUID
-	IncidentTypeCode   *string
-	ApplicantLastName  string
-	ApplicantFirstName string
-	CallerNumber       string
-	DictatedNumber     string
-	Notes              string
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) CreateAttemptAnswer(ctx context.Context, arg CreateAttemptAnswerParams) error {
-	_, err := q.db.Exec(ctx, createAttemptAnswer,
-		arg.AttemptID,
-		arg.IncidentTypeCode,
-		arg.ApplicantLastName,
-		arg.ApplicantFirstName,
-		arg.CallerNumber,
-		arg.DictatedNumber,
-		arg.Notes,
-		arg.UpdatedAt,
+		arg.Report,
 	)
 	return err
 }
 
 const createTicket = `-- name: CreateTicket :exec
 INSERT INTO tickets (
-    id, group_id, title, body, max_attempts,
-    available_from, available_until, duration_seconds, created_by, created_at
+    id, variant_id, topic_id, title, body, created_by, created_at,
+    scenario, scenario_version, mode, briefing
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 `
 
 type CreateTicketParams struct {
 	ID              uuid.UUID
-	GroupID         uuid.UUID
+	VariantID       uuid.UUID
+	TopicID         uuid.UUID
 	Title           string
 	Body            string
-	MaxAttempts     *int32
-	AvailableFrom   *time.Time
-	AvailableUntil  *time.Time
-	DurationSeconds *int32
 	CreatedBy       uuid.UUID
 	CreatedAt       time.Time
+	Scenario        []byte
+	ScenarioVersion string
+	Mode            string
+	Briefing        string
 }
 
 func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) error {
 	_, err := q.db.Exec(ctx, createTicket,
 		arg.ID,
-		arg.GroupID,
+		arg.VariantID,
+		arg.TopicID,
 		arg.Title,
 		arg.Body,
-		arg.MaxAttempts,
-		arg.AvailableFrom,
-		arg.AvailableUntil,
-		arg.DurationSeconds,
 		arg.CreatedBy,
 		arg.CreatedAt,
+		arg.Scenario,
+		arg.ScenarioVersion,
+		arg.Mode,
+		arg.Briefing,
 	)
 	return err
 }
 
 const deleteAttemptAnswerServices = `-- name: DeleteAttemptAnswerServices :exec
-DELETE FROM attempt_answer_services WHERE attempt_id = $1
+DELETE FROM attempt_answer_services WHERE attempt_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) DeleteAttemptAnswerServices(ctx context.Context, attemptID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAttemptAnswerServices, attemptID)
+type DeleteAttemptAnswerServicesParams struct {
+	AttemptID uuid.UUID
+	TicketID  uuid.UUID
+}
+
+func (q *Queries) DeleteAttemptAnswerServices(ctx context.Context, arg DeleteAttemptAnswerServicesParams) error {
+	_, err := q.db.Exec(ctx, deleteAttemptAnswerServices, arg.AttemptID, arg.TicketID)
 	return err
 }
 
 const deleteAttemptAnswerTags = `-- name: DeleteAttemptAnswerTags :exec
-DELETE FROM attempt_answer_tags WHERE attempt_id = $1
+DELETE FROM attempt_answer_tags WHERE attempt_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) DeleteAttemptAnswerTags(ctx context.Context, attemptID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAttemptAnswerTags, attemptID)
+type DeleteAttemptAnswerTagsParams struct {
+	AttemptID uuid.UUID
+	TicketID  uuid.UUID
+}
+
+func (q *Queries) DeleteAttemptAnswerTags(ctx context.Context, arg DeleteAttemptAnswerTagsParams) error {
+	_, err := q.db.Exec(ctx, deleteAttemptAnswerTags, arg.AttemptID, arg.TicketID)
 	return err
 }
 
@@ -169,46 +136,64 @@ func (q *Queries) DeleteReferenceAnswerTags(ctx context.Context, ticketID uuid.U
 	return err
 }
 
-const findInProgressAttempt = `-- name: FindInProgressAttempt :one
-SELECT id, ticket_id, user_id, attempt_no, status, started_at, deadline_at, finished_at, score
-FROM ticket_attempts
-WHERE ticket_id = $1 AND user_id = $2 AND status = 'in_progress'
+const deleteTicket = `-- name: DeleteTicket :exec
+DELETE FROM tickets WHERE id = $1
 `
 
-type FindInProgressAttemptParams struct {
-	TicketID uuid.UUID
-	UserID   uuid.UUID
+func (q *Queries) DeleteTicket(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteTicket, id)
+	return err
 }
 
-func (q *Queries) FindInProgressAttempt(ctx context.Context, arg FindInProgressAttemptParams) (TicketAttempt, error) {
-	row := q.db.QueryRow(ctx, findInProgressAttempt, arg.TicketID, arg.UserID)
+const findOpenAttempt = `-- name: FindOpenAttempt :one
+SELECT id, variant_id, user_id, granted_by, attempt_no, status,
+       started_at, deadline_at, finished_at, score, report
+FROM ticket_attempts
+WHERE variant_id = $1 AND user_id = $2 AND status IN ('available', 'in_progress')
+`
+
+type FindOpenAttemptParams struct {
+	VariantID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) FindOpenAttempt(ctx context.Context, arg FindOpenAttemptParams) (TicketAttempt, error) {
+	row := q.db.QueryRow(ctx, findOpenAttempt, arg.VariantID, arg.UserID)
 	var i TicketAttempt
 	err := row.Scan(
 		&i.ID,
-		&i.TicketID,
+		&i.VariantID,
 		&i.UserID,
+		&i.GrantedBy,
 		&i.AttemptNo,
 		&i.Status,
 		&i.StartedAt,
 		&i.DeadlineAt,
 		&i.FinishedAt,
 		&i.Score,
+		&i.Report,
 	)
 	return i, err
 }
 
 const getAttemptAnswer = `-- name: GetAttemptAnswer :one
-SELECT attempt_id, incident_type_code, applicant_last_name, applicant_first_name,
+SELECT attempt_id, ticket_id, incident_type_code, applicant_last_name, applicant_first_name,
        caller_number, dictated_number, notes, updated_at
 FROM attempt_answers
-WHERE attempt_id = $1
+WHERE attempt_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) GetAttemptAnswer(ctx context.Context, attemptID uuid.UUID) (AttemptAnswer, error) {
-	row := q.db.QueryRow(ctx, getAttemptAnswer, attemptID)
+type GetAttemptAnswerParams struct {
+	AttemptID uuid.UUID
+	TicketID  uuid.UUID
+}
+
+func (q *Queries) GetAttemptAnswer(ctx context.Context, arg GetAttemptAnswerParams) (AttemptAnswer, error) {
+	row := q.db.QueryRow(ctx, getAttemptAnswer, arg.AttemptID, arg.TicketID)
 	var i AttemptAnswer
 	err := row.Scan(
 		&i.AttemptID,
+		&i.TicketID,
 		&i.IncidentTypeCode,
 		&i.ApplicantLastName,
 		&i.ApplicantFirstName,
@@ -221,7 +206,8 @@ func (q *Queries) GetAttemptAnswer(ctx context.Context, attemptID uuid.UUID) (At
 }
 
 const getAttemptByID = `-- name: GetAttemptByID :one
-SELECT id, ticket_id, user_id, attempt_no, status, started_at, deadline_at, finished_at, score
+SELECT id, variant_id, user_id, granted_by, attempt_no, status,
+       started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE id = $1
 `
@@ -231,14 +217,16 @@ func (q *Queries) GetAttemptByID(ctx context.Context, id uuid.UUID) (TicketAttem
 	var i TicketAttempt
 	err := row.Scan(
 		&i.ID,
-		&i.TicketID,
+		&i.VariantID,
 		&i.UserID,
+		&i.GrantedBy,
 		&i.AttemptNo,
 		&i.Status,
 		&i.StartedAt,
 		&i.DeadlineAt,
 		&i.FinishedAt,
 		&i.Score,
+		&i.Report,
 	)
 	return i, err
 }
@@ -283,8 +271,8 @@ func (q *Queries) GetReferenceAnswer(ctx context.Context, ticketID uuid.UUID) (T
 }
 
 const getTicketByID = `-- name: GetTicketByID :one
-SELECT id, group_id, title, body, max_attempts,
-       available_from, available_until, duration_seconds, created_by, created_at
+SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+       scenario, scenario_version, reference, mode, briefing
 FROM tickets
 WHERE id = $1
 `
@@ -294,44 +282,66 @@ func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, erro
 	var i Ticket
 	err := row.Scan(
 		&i.ID,
-		&i.GroupID,
+		&i.VariantID,
+		&i.TopicID,
 		&i.Title,
 		&i.Body,
-		&i.MaxAttempts,
-		&i.AvailableFrom,
-		&i.AvailableUntil,
-		&i.DurationSeconds,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Scenario,
+		&i.ScenarioVersion,
+		&i.Reference,
+		&i.Mode,
+		&i.Briefing,
 	)
 	return i, err
 }
 
+const hasAnyAttempt = `-- name: HasAnyAttempt :one
+SELECT EXISTS(
+    SELECT 1 FROM ticket_attempts WHERE variant_id = $1 AND user_id = $2
+) AS exists
+`
+
+type HasAnyAttemptParams struct {
+	VariantID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) HasAnyAttempt(ctx context.Context, arg HasAnyAttemptParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasAnyAttempt, arg.VariantID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertAttemptAnswerService = `-- name: InsertAttemptAnswerService :exec
-INSERT INTO attempt_answer_services (attempt_id, service_code) VALUES ($1, $2)
+INSERT INTO attempt_answer_services (attempt_id, ticket_id, service_code) VALUES ($1, $2, $3)
 `
 
 type InsertAttemptAnswerServiceParams struct {
 	AttemptID   uuid.UUID
+	TicketID    uuid.UUID
 	ServiceCode string
 }
 
 func (q *Queries) InsertAttemptAnswerService(ctx context.Context, arg InsertAttemptAnswerServiceParams) error {
-	_, err := q.db.Exec(ctx, insertAttemptAnswerService, arg.AttemptID, arg.ServiceCode)
+	_, err := q.db.Exec(ctx, insertAttemptAnswerService, arg.AttemptID, arg.TicketID, arg.ServiceCode)
 	return err
 }
 
 const insertAttemptAnswerTag = `-- name: InsertAttemptAnswerTag :exec
-INSERT INTO attempt_answer_tags (attempt_id, tag_code) VALUES ($1, $2)
+INSERT INTO attempt_answer_tags (attempt_id, ticket_id, tag_code) VALUES ($1, $2, $3)
 `
 
 type InsertAttemptAnswerTagParams struct {
 	AttemptID uuid.UUID
+	TicketID  uuid.UUID
 	TagCode   string
 }
 
 func (q *Queries) InsertAttemptAnswerTag(ctx context.Context, arg InsertAttemptAnswerTagParams) error {
-	_, err := q.db.Exec(ctx, insertAttemptAnswerTag, arg.AttemptID, arg.TagCode)
+	_, err := q.db.Exec(ctx, insertAttemptAnswerTag, arg.AttemptID, arg.TicketID, arg.TagCode)
 	return err
 }
 
@@ -364,11 +374,16 @@ func (q *Queries) InsertReferenceAnswerTag(ctx context.Context, arg InsertRefere
 }
 
 const listAttemptAnswerServices = `-- name: ListAttemptAnswerServices :many
-SELECT service_code FROM attempt_answer_services WHERE attempt_id = $1
+SELECT service_code FROM attempt_answer_services WHERE attempt_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) ListAttemptAnswerServices(ctx context.Context, attemptID uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, listAttemptAnswerServices, attemptID)
+type ListAttemptAnswerServicesParams struct {
+	AttemptID uuid.UUID
+	TicketID  uuid.UUID
+}
+
+func (q *Queries) ListAttemptAnswerServices(ctx context.Context, arg ListAttemptAnswerServicesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listAttemptAnswerServices, arg.AttemptID, arg.TicketID)
 	if err != nil {
 		return nil, err
 	}
@@ -388,11 +403,16 @@ func (q *Queries) ListAttemptAnswerServices(ctx context.Context, attemptID uuid.
 }
 
 const listAttemptAnswerTags = `-- name: ListAttemptAnswerTags :many
-SELECT tag_code FROM attempt_answer_tags WHERE attempt_id = $1
+SELECT tag_code FROM attempt_answer_tags WHERE attempt_id = $1 AND ticket_id = $2
 `
 
-func (q *Queries) ListAttemptAnswerTags(ctx context.Context, attemptID uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, listAttemptAnswerTags, attemptID)
+type ListAttemptAnswerTagsParams struct {
+	AttemptID uuid.UUID
+	TicketID  uuid.UUID
+}
+
+func (q *Queries) ListAttemptAnswerTags(ctx context.Context, arg ListAttemptAnswerTagsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listAttemptAnswerTags, arg.AttemptID, arg.TicketID)
 	if err != nil {
 		return nil, err
 	}
@@ -411,20 +431,53 @@ func (q *Queries) ListAttemptAnswerTags(ctx context.Context, attemptID uuid.UUID
 	return items, nil
 }
 
-const listAttemptsByTicketUser = `-- name: ListAttemptsByTicketUser :many
-SELECT id, ticket_id, user_id, attempt_no, status, started_at, deadline_at, finished_at, score
+const listAttemptAnswers = `-- name: ListAttemptAnswers :many
+SELECT attempt_id, ticket_id, incident_type_code, applicant_last_name, applicant_first_name,
+       caller_number, dictated_number, notes, updated_at
+FROM attempt_answers
+WHERE attempt_id = $1
+`
+
+func (q *Queries) ListAttemptAnswers(ctx context.Context, attemptID uuid.UUID) ([]AttemptAnswer, error) {
+	rows, err := q.db.Query(ctx, listAttemptAnswers, attemptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AttemptAnswer{}
+	for rows.Next() {
+		var i AttemptAnswer
+		if err := rows.Scan(
+			&i.AttemptID,
+			&i.TicketID,
+			&i.IncidentTypeCode,
+			&i.ApplicantLastName,
+			&i.ApplicantFirstName,
+			&i.CallerNumber,
+			&i.DictatedNumber,
+			&i.Notes,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttemptsByUser = `-- name: ListAttemptsByUser :many
+SELECT id, variant_id, user_id, granted_by, attempt_no, status,
+       started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
-WHERE ticket_id = $1 AND user_id = $2
+WHERE user_id = $1
 ORDER BY attempt_no
 `
 
-type ListAttemptsByTicketUserParams struct {
-	TicketID uuid.UUID
-	UserID   uuid.UUID
-}
-
-func (q *Queries) ListAttemptsByTicketUser(ctx context.Context, arg ListAttemptsByTicketUserParams) ([]TicketAttempt, error) {
-	rows, err := q.db.Query(ctx, listAttemptsByTicketUser, arg.TicketID, arg.UserID)
+func (q *Queries) ListAttemptsByUser(ctx context.Context, userID uuid.UUID) ([]TicketAttempt, error) {
+	rows, err := q.db.Query(ctx, listAttemptsByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -434,14 +487,61 @@ func (q *Queries) ListAttemptsByTicketUser(ctx context.Context, arg ListAttempts
 		var i TicketAttempt
 		if err := rows.Scan(
 			&i.ID,
-			&i.TicketID,
+			&i.VariantID,
 			&i.UserID,
+			&i.GrantedBy,
 			&i.AttemptNo,
 			&i.Status,
 			&i.StartedAt,
 			&i.DeadlineAt,
 			&i.FinishedAt,
 			&i.Score,
+			&i.Report,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttemptsByVariantUser = `-- name: ListAttemptsByVariantUser :many
+SELECT id, variant_id, user_id, granted_by, attempt_no, status,
+       started_at, deadline_at, finished_at, score, report
+FROM ticket_attempts
+WHERE variant_id = $1 AND user_id = $2
+ORDER BY attempt_no
+`
+
+type ListAttemptsByVariantUserParams struct {
+	VariantID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) ListAttemptsByVariantUser(ctx context.Context, arg ListAttemptsByVariantUserParams) ([]TicketAttempt, error) {
+	rows, err := q.db.Query(ctx, listAttemptsByVariantUser, arg.VariantID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TicketAttempt{}
+	for rows.Next() {
+		var i TicketAttempt
+		if err := rows.Scan(
+			&i.ID,
+			&i.VariantID,
+			&i.UserID,
+			&i.GrantedBy,
+			&i.AttemptNo,
+			&i.Status,
+			&i.StartedAt,
+			&i.DeadlineAt,
+			&i.FinishedAt,
+			&i.Score,
+			&i.Report,
 		); err != nil {
 			return nil, err
 		}
@@ -501,16 +601,16 @@ func (q *Queries) ListReferenceAnswerTags(ctx context.Context, ticketID uuid.UUI
 	return items, nil
 }
 
-const listTicketsByGroup = `-- name: ListTicketsByGroup :many
-SELECT id, group_id, title, body, max_attempts,
-       available_from, available_until, duration_seconds, created_by, created_at
+const listTicketsByVariant = `-- name: ListTicketsByVariant :many
+SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+       scenario, scenario_version, reference, mode, briefing
 FROM tickets
-WHERE group_id = $1
+WHERE variant_id = $1
 ORDER BY created_at
 `
 
-func (q *Queries) ListTicketsByGroup(ctx context.Context, groupID uuid.UUID) ([]Ticket, error) {
-	rows, err := q.db.Query(ctx, listTicketsByGroup, groupID)
+func (q *Queries) ListTicketsByVariant(ctx context.Context, variantID uuid.UUID) ([]Ticket, error) {
+	rows, err := q.db.Query(ctx, listTicketsByVariant, variantID)
 	if err != nil {
 		return nil, err
 	}
@@ -520,15 +620,17 @@ func (q *Queries) ListTicketsByGroup(ctx context.Context, groupID uuid.UUID) ([]
 		var i Ticket
 		if err := rows.Scan(
 			&i.ID,
-			&i.GroupID,
+			&i.VariantID,
+			&i.TopicID,
 			&i.Title,
 			&i.Body,
-			&i.MaxAttempts,
-			&i.AvailableFrom,
-			&i.AvailableUntil,
-			&i.DurationSeconds,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.Scenario,
+			&i.ScenarioVersion,
+			&i.Reference,
+			&i.Mode,
+			&i.Briefing,
 		); err != nil {
 			return nil, err
 		}
@@ -543,16 +645,16 @@ func (q *Queries) ListTicketsByGroup(ctx context.Context, groupID uuid.UUID) ([]
 const maxAttemptNo = `-- name: MaxAttemptNo :one
 SELECT COALESCE(max(attempt_no), 0)::int AS max_no
 FROM ticket_attempts
-WHERE ticket_id = $1 AND user_id = $2
+WHERE variant_id = $1 AND user_id = $2
 `
 
 type MaxAttemptNoParams struct {
-	TicketID uuid.UUID
-	UserID   uuid.UUID
+	VariantID uuid.UUID
+	UserID    uuid.UUID
 }
 
 func (q *Queries) MaxAttemptNo(ctx context.Context, arg MaxAttemptNoParams) (int32, error) {
-	row := q.db.QueryRow(ctx, maxAttemptNo, arg.TicketID, arg.UserID)
+	row := q.db.QueryRow(ctx, maxAttemptNo, arg.VariantID, arg.UserID)
 	var max_no int32
 	err := row.Scan(&max_no)
 	return max_no, err
@@ -560,41 +662,90 @@ func (q *Queries) MaxAttemptNo(ctx context.Context, arg MaxAttemptNoParams) (int
 
 const updateAttempt = `-- name: UpdateAttempt :exec
 UPDATE ticket_attempts
-SET status = $2, finished_at = $3, score = $4
+SET status = $2, started_at = $3, deadline_at = $4, finished_at = $5, score = $6, report = $7
 WHERE id = $1
 `
 
 type UpdateAttemptParams struct {
 	ID         uuid.UUID
 	Status     string
+	StartedAt  *time.Time
+	DeadlineAt *time.Time
 	FinishedAt *time.Time
 	Score      *int16
+	Report     []byte
 }
 
 func (q *Queries) UpdateAttempt(ctx context.Context, arg UpdateAttemptParams) error {
 	_, err := q.db.Exec(ctx, updateAttempt,
 		arg.ID,
 		arg.Status,
+		arg.StartedAt,
+		arg.DeadlineAt,
 		arg.FinishedAt,
 		arg.Score,
+		arg.Report,
 	)
 	return err
 }
 
-const updateAttemptAnswer = `-- name: UpdateAttemptAnswer :exec
-UPDATE attempt_answers
-SET incident_type_code = $2,
-    applicant_last_name = $3,
-    applicant_first_name = $4,
-    caller_number = $5,
-    dictated_number = $6,
-    notes = $7,
-    updated_at = $8
-WHERE attempt_id = $1
+const updateDialogSnapshot = `-- name: UpdateDialogSnapshot :execrows
+UPDATE tickets SET scenario = $2, scenario_version = $3 WHERE id = $1
 `
 
-type UpdateAttemptAnswerParams struct {
+type UpdateDialogSnapshotParams struct {
+	ID              uuid.UUID
+	Scenario        []byte
+	ScenarioVersion string
+}
+
+func (q *Queries) UpdateDialogSnapshot(ctx context.Context, arg UpdateDialogSnapshotParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateDialogSnapshot, arg.ID, arg.Scenario, arg.ScenarioVersion)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateTicket = `-- name: UpdateTicket :exec
+UPDATE tickets SET title = $2, body = $3, topic_id = $4 WHERE id = $1
+`
+
+type UpdateTicketParams struct {
+	ID      uuid.UUID
+	Title   string
+	Body    string
+	TopicID uuid.UUID
+}
+
+func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) error {
+	_, err := q.db.Exec(ctx, updateTicket,
+		arg.ID,
+		arg.Title,
+		arg.Body,
+		arg.TopicID,
+	)
+	return err
+}
+
+const upsertAttemptAnswer = `-- name: UpsertAttemptAnswer :exec
+INSERT INTO attempt_answers (
+    attempt_id, ticket_id, incident_type_code, applicant_last_name, applicant_first_name,
+    caller_number, dictated_number, notes, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (attempt_id, ticket_id) DO UPDATE SET
+    incident_type_code = EXCLUDED.incident_type_code,
+    applicant_last_name = EXCLUDED.applicant_last_name,
+    applicant_first_name = EXCLUDED.applicant_first_name,
+    caller_number = EXCLUDED.caller_number,
+    dictated_number = EXCLUDED.dictated_number,
+    notes = EXCLUDED.notes,
+    updated_at = EXCLUDED.updated_at
+`
+
+type UpsertAttemptAnswerParams struct {
 	AttemptID          uuid.UUID
+	TicketID           uuid.UUID
 	IncidentTypeCode   *string
 	ApplicantLastName  string
 	ApplicantFirstName string
@@ -604,9 +755,10 @@ type UpdateAttemptAnswerParams struct {
 	UpdatedAt          time.Time
 }
 
-func (q *Queries) UpdateAttemptAnswer(ctx context.Context, arg UpdateAttemptAnswerParams) error {
-	_, err := q.db.Exec(ctx, updateAttemptAnswer,
+func (q *Queries) UpsertAttemptAnswer(ctx context.Context, arg UpsertAttemptAnswerParams) error {
+	_, err := q.db.Exec(ctx, upsertAttemptAnswer,
 		arg.AttemptID,
+		arg.TicketID,
 		arg.IncidentTypeCode,
 		arg.ApplicantLastName,
 		arg.ApplicantFirstName,

@@ -10,17 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type Group struct {
-	ID uuid.UUID
-}
-
 type Ticket struct {
 	ID uuid.UUID
 }
 
 type TicketGenerationJob struct {
 	ID                uuid.UUID
-	GroupID           uuid.UUID
+	VariantID         uuid.UUID
+	TopicID           uuid.UUID
 	CreatedBy         uuid.UUID
 	Prompt            string
 	Status            string
@@ -38,6 +35,14 @@ type TicketGenerationJob struct {
 	UpdatedAt         time.Time
 }
 
+type Topic struct {
+	ID uuid.UUID
+}
+
 type User struct {
+	ID uuid.UUID
+}
+
+type Variant struct {
 	ID uuid.UUID
 }

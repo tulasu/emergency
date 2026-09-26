@@ -9,7 +9,6 @@ import (
 	genapp "traineebox/internal/generation/application"
 	generrs "traineebox/internal/generation/domain/errs"
 	"traineebox/internal/generation/domain/repositories"
-	genvo "traineebox/internal/generation/domain/value_objects"
 	geninfra "traineebox/internal/generation/infrastructure"
 	ticketserrs "traineebox/internal/tickets/domain/errs"
 	ticketsmodels "traineebox/internal/tickets/domain/models"
@@ -19,20 +18,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type generationMembership struct {
-	inner ticketsrepos.GroupMembership
+type generationCurriculum struct {
+	inner interface {
+		VariantExists(ctx context.Context, variantID uuid.UUID) error
+		TopicExists(ctx context.Context, topicID uuid.UUID) error
+	}
 }
 
-func (m generationMembership) RoleOf(ctx context.Context, groupID, userID uuid.UUID) (genvo.MemberRole, error) {
-	role, err := m.inner.RoleOf(ctx, groupID, userID)
-	if err != nil {
-		return "", mapTicketsToGeneration(err)
-	}
-	parsed, err := genvo.ParseMemberRole(role.String())
-	if err != nil {
-		return "", generrs.ErrInvalidInput
-	}
-	return parsed, nil
+func (c generationCurriculum) VariantExists(ctx context.Context, variantID uuid.UUID) error {
+	return mapTicketsToGeneration(c.inner.VariantExists(ctx, variantID))
+}
+
+func (c generationCurriculum) TopicExists(ctx context.Context, topicID uuid.UUID) error {
+	return mapTicketsToGeneration(c.inner.TopicExists(ctx, topicID))
 }
 
 type generationCatalog struct {

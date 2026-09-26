@@ -9,28 +9,25 @@ import (
 )
 
 func TestManageTicket(t *testing.T) {
-	if err := abilities.ManageTicket(value_objects.MemberRoleOwner, false); err != nil {
+	if err := abilities.ManageTicket(value_objects.AccountRoleTeacher); err != nil {
 		t.Fatal(err)
 	}
-	if err := abilities.ManageTicket(value_objects.MemberRoleTeacher, false); err != nil {
+	if err := abilities.ManageTicket(value_objects.AccountRoleAdmin); err != nil {
 		t.Fatal(err)
 	}
-	if err := abilities.ManageTicket(value_objects.MemberRoleStudent, false); err != errs.ErrForbidden {
+	if err := abilities.ManageTicket(value_objects.AccountRoleStudent); err != errs.ErrForbidden {
 		t.Fatalf("got %v", err)
-	}
-	if err := abilities.ManageTicket("", true); err != nil {
-		t.Fatal(err)
 	}
 }
 
 func TestStartAttempt(t *testing.T) {
-	if err := abilities.StartAttempt(value_objects.MemberRoleStudent, false); err != nil {
+	if err := abilities.StartAttempt(value_objects.AccountRoleStudent); err != nil {
 		t.Fatal(err)
 	}
-	if err := abilities.StartAttempt(value_objects.MemberRoleTeacher, false); err != errs.ErrForbidden {
+	if err := abilities.StartAttempt(value_objects.AccountRoleTeacher); err != errs.ErrForbidden {
 		t.Fatalf("got %v", err)
 	}
-	if err := abilities.StartAttempt("", true); err != errs.ErrForbidden {
+	if err := abilities.StartAttempt(value_objects.AccountRoleAdmin); err != errs.ErrForbidden {
 		t.Fatalf("admin start got %v", err)
 	}
 }

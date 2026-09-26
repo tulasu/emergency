@@ -13,6 +13,7 @@ var (
 	ErrAttemptsExhausted   = errors.New("attempts exhausted")
 	ErrAttemptInProgress   = errors.New("attempt already in progress")
 	ErrAttemptNotActive    = errors.New("attempt not active")
+	ErrAttemptNotAvailable = errors.New("attempt not available")
 	ErrNoReferenceAnswer   = errors.New("no reference answer")
 	ErrInvalidTags         = errors.New("tags do not belong to incident type")
 	ErrInvalidTagSelection = errors.New("invalid tag selection")

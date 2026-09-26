@@ -1,29 +1,29 @@
 -- name: CreateGenerationJob :exec
 INSERT INTO ticket_generation_jobs (
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
-    $7, $8, $9, $10, $11,
-    $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11, $12,
+    $13, $14, $15, $16, $17, $18
 );
 
 -- name: GetGenerationJobByID :one
 SELECT
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 FROM ticket_generation_jobs
 WHERE id = $1;
 
--- name: ListGenerationJobsByGroup :many
+-- name: ListGenerationJobsByVariant :many
 SELECT
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 FROM ticket_generation_jobs
-WHERE group_id = $1
+WHERE variant_id = $1
 ORDER BY created_at DESC;
 
 -- name: UpdateGenerationJobCAS :execrows

@@ -32,16 +32,13 @@ type serviceDTO struct {
 }
 
 type ticketDTO struct {
-	ID              string  `json:"id"`
-	GroupID         string  `json:"group_id"`
-	Title           string  `json:"title"`
-	Body            string  `json:"body"`
-	MaxAttempts     *int    `json:"max_attempts,omitempty"`
-	AvailableFrom   *string `json:"available_from,omitempty"`
-	AvailableUntil  *string `json:"available_until,omitempty"`
-	DurationSeconds *int    `json:"duration_seconds,omitempty"`
-	CreatedBy       string  `json:"created_by"`
-	CreatedAt       string  `json:"created_at"`
+	ID        string `json:"id"`
+	VariantID string `json:"variant_id"`
+	TopicID   string `json:"topic_id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	CreatedBy string `json:"created_by"`
+	CreatedAt string `json:"created_at"`
 }
 
 type answerDTO struct {
@@ -55,17 +52,36 @@ type answerDTO struct {
 	Notes              string   `json:"notes"`
 }
 
+type reportErrorDTO struct {
+	Field    string `json:"field"`
+	Expected any    `json:"expected,omitempty"`
+	Actual   any    `json:"actual,omitempty"`
+}
+
+type reportItemDTO struct {
+	TicketID string           `json:"ticket_id"`
+	Score    int              `json:"score"`
+	Errors   []reportErrorDTO `json:"errors"`
+}
+
+type reportDTO struct {
+	OverallScore int             `json:"overall_score"`
+	Items        []reportItemDTO `json:"items"`
+}
+
 type attemptDTO struct {
-	ID         string    `json:"id"`
-	TicketID   string    `json:"ticket_id"`
-	UserID     string    `json:"user_id"`
-	AttemptNo  int       `json:"attempt_no"`
-	Status     string    `json:"status"`
-	StartedAt  string    `json:"started_at"`
-	DeadlineAt *string   `json:"deadline_at,omitempty"`
-	FinishedAt *string   `json:"finished_at,omitempty"`
-	Score      *int      `json:"score,omitempty"`
-	Answer     answerDTO `json:"answer"`
+	ID         string               `json:"id"`
+	VariantID  string               `json:"variant_id"`
+	UserID     string               `json:"user_id"`
+	GrantedBy  string               `json:"granted_by"`
+	AttemptNo  int                  `json:"attempt_no"`
+	Status     string               `json:"status"`
+	StartedAt  *string              `json:"started_at,omitempty"`
+	DeadlineAt *string              `json:"deadline_at,omitempty"`
+	FinishedAt *string              `json:"finished_at,omitempty"`
+	Score      *int                 `json:"score,omitempty"`
+	Answers    map[string]answerDTO `json:"answers"`
+	Report     reportDTO            `json:"report"`
 }
 
 type referenceAnswerDTO struct {
@@ -81,31 +97,22 @@ type referenceAnswerDTO struct {
 
 func toTicketDTO(t models.Ticket) ticketDTO {
 	return ticketDTO{
-		ID:              t.ID.String(),
-		GroupID:         t.GroupID.String(),
-		Title:           t.Title.String(),
-		Body:            t.Body,
-		MaxAttempts:     t.MaxAttempts,
-		AvailableFrom:   formatTimePtr(t.AvailableFrom),
-		AvailableUntil:  formatTimePtr(t.AvailableUntil),
-		DurationSeconds: t.DurationSeconds,
-		CreatedBy:       t.CreatedBy.String(),
-		CreatedAt:       t.CreatedAt.UTC().Format(time.RFC3339Nano),
+		ID: t.ID.String(), VariantID: t.VariantID.String(), TopicID: t.TopicID.String(),
+		Title: t.Title.String(), Body: t.Body, CreatedBy: t.CreatedBy.String(),
+		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
 func toAttemptDTO(a models.Attempt) attemptDTO {
+	answers := make(map[string]answerDTO, len(a.Answers))
+	for id, ans := range a.Answers {
+		answers[id.String()] = toAnswerDTO(ans)
+	}
 	return attemptDTO{
-		ID:         a.ID.String(),
-		TicketID:   a.TicketID.String(),
-		UserID:     a.UserID.String(),
-		AttemptNo:  a.AttemptNo,
-		Status:     a.Status.String(),
-		StartedAt:  a.StartedAt.UTC().Format(time.RFC3339Nano),
-		DeadlineAt: formatTimePtr(a.DeadlineAt),
-		FinishedAt: formatTimePtr(a.FinishedAt),
-		Score:      a.Score,
-		Answer:     toAnswerDTO(a.Answer),
+		ID: a.ID.String(), VariantID: a.VariantID.String(), UserID: a.UserID.String(),
+		GrantedBy: a.GrantedBy.String(), AttemptNo: a.AttemptNo, Status: a.Status.String(),
+		StartedAt: formatTimePtr(a.StartedAt), DeadlineAt: formatTimePtr(a.DeadlineAt),
+		FinishedAt: formatTimePtr(a.FinishedAt), Score: a.Score, Answers: answers, Report: toReportDTO(a.Report),
 	}
 }
 
@@ -122,16 +129,24 @@ func toAnswerDTO(a models.Answer) answerDTO {
 	}
 }
 
+func toReportDTO(r models.Report) reportDTO {
+	items := make([]reportItemDTO, 0, len(r.Items))
+	for _, it := range r.Items {
+		errs := make([]reportErrorDTO, 0, len(it.Errors))
+		for _, e := range it.Errors {
+			errs = append(errs, reportErrorDTO{Field: e.Field, Expected: e.Expected, Actual: e.Actual})
+		}
+		items = append(items, reportItemDTO{TicketID: it.TicketID.String(), Score: it.Score, Errors: errs})
+	}
+	return reportDTO{OverallScore: r.OverallScore, Items: items}
+}
+
 func toReferenceDTO(r models.ReferenceAnswer) referenceAnswerDTO {
 	return referenceAnswerDTO{
-		TicketID:           r.TicketID.String(),
-		IncidentTypeCode:   r.IncidentTypeCode,
-		TagCodes:           append([]string(nil), r.TagCodes...),
-		ServiceCodes:       append([]string(nil), r.ServiceCodes...),
-		ApplicantLastName:  r.ApplicantLastName,
-		ApplicantFirstName: r.ApplicantFirstName,
-		CallerNumber:       r.CallerNumber,
-		DictatedNumber:     r.DictatedNumber,
+		TicketID: r.TicketID.String(), IncidentTypeCode: r.IncidentTypeCode,
+		TagCodes: append([]string(nil), r.TagCodes...), ServiceCodes: append([]string(nil), r.ServiceCodes...),
+		ApplicantLastName: r.ApplicantLastName, ApplicantFirstName: r.ApplicantFirstName,
+		CallerNumber: r.CallerNumber, DictatedNumber: r.DictatedNumber,
 	}
 }
 
@@ -141,19 +156,4 @@ func formatTimePtr(t *time.Time) *string {
 	}
 	s := t.UTC().Format(time.RFC3339Nano)
 	return &s
-}
-
-func parseOptionalTime(s *string) (*time.Time, error) {
-	if s == nil || *s == "" {
-		return nil, nil
-	}
-	t, err := time.Parse(time.RFC3339Nano, *s)
-	if err != nil {
-		t, err = time.Parse(time.RFC3339, *s)
-		if err != nil {
-			return nil, err
-		}
-	}
-	u := t.UTC()
-	return &u, nil
 }

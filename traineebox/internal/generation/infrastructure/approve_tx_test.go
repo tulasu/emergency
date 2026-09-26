@@ -21,13 +21,25 @@ func TestApproveAtomically(t *testing.T) {
 	ctx := context.Background()
 
 	teacher := testkit.SeedUser(t, pool, "atomowner", "password1", "teacher")
-	groupID := uuid.New()
-	if _, err := pool.Exec(ctx, `INSERT INTO groups (id, name) VALUES ($1, 'Atom')`, groupID); err != nil {
+	topicID := uuid.New()
+	moduleID := uuid.New()
+	lessonID := uuid.New()
+	variantID := uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO topics (id, title, created_by) VALUES ($1, 'Atom topic', $2)`, topicID, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO modules (id, title, description, created_by) VALUES ($1, 'Atom module', '', $2)`, moduleID, teacher.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO lessons (id, module_id, title, position) VALUES ($1, $2, 'Atom lesson', 0)`, lessonID, moduleID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO variants (id, lesson_id, title, position) VALUES ($1, $2, 'Atom variant', 0)`, variantID, lessonID); err != nil {
 		t.Fatal(err)
 	}
 
 	jobsRepo := geninfra.NewJobRepository(pool)
-	job, err := genmodels.NewJob(groupID, teacher.ID, "пожар на складе")
+	job, err := genmodels.NewJob(variantID, topicID, teacher.ID, "пожар на складе")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +62,8 @@ func TestApproveAtomically(t *testing.T) {
 	ticketID := uuid.New()
 	draft := repositories.PublishDraft{
 		TicketID:        ticketID,
-		GroupID:         groupID,
+		VariantID:       variantID,
+		TopicID:         topicID,
 		Title:           "Пожар на складе",
 		Body:            "b",
 		CreatedBy:       teacher.ID,

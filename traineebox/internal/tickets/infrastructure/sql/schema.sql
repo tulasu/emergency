@@ -1,14 +1,24 @@
+CREATE TABLE topics (
+    id UUID PRIMARY KEY
+);
+
+CREATE TABLE variants (
+    id UUID PRIMARY KEY
+);
+
 CREATE TABLE tickets (
     id UUID PRIMARY KEY,
-    group_id UUID NOT NULL,
+    variant_id UUID NOT NULL,
+    topic_id UUID NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
-    max_attempts INT NULL,
-    available_from TIMESTAMPTZ NULL,
-    available_until TIMESTAMPTZ NULL,
-    duration_seconds INT NULL,
     created_by UUID NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    scenario JSONB NOT NULL,
+    scenario_version TEXT NOT NULL,
+    reference JSONB NOT NULL,
+    mode TEXT NOT NULL,
+    briefing TEXT NOT NULL
 );
 
 CREATE TABLE ticket_reference_answers (
@@ -34,37 +44,43 @@ CREATE TABLE reference_answer_services (
 
 CREATE TABLE ticket_attempts (
     id UUID PRIMARY KEY,
-    ticket_id UUID NOT NULL,
+    variant_id UUID NOT NULL,
     user_id UUID NOT NULL,
+    granted_by UUID NOT NULL,
     attempt_no INT NOT NULL,
     status TEXT NOT NULL,
-    started_at TIMESTAMPTZ NOT NULL,
+    started_at TIMESTAMPTZ NULL,
     deadline_at TIMESTAMPTZ NULL,
     finished_at TIMESTAMPTZ NULL,
-    score SMALLINT NULL
+    score SMALLINT NULL,
+    report JSONB NOT NULL
 );
 
 CREATE TABLE attempt_answers (
-    attempt_id UUID PRIMARY KEY,
+    attempt_id UUID NOT NULL,
+    ticket_id UUID NOT NULL,
     incident_type_code TEXT NULL,
     applicant_last_name TEXT NOT NULL,
     applicant_first_name TEXT NOT NULL,
     caller_number TEXT NOT NULL,
     dictated_number TEXT NOT NULL,
     notes TEXT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (attempt_id, ticket_id)
 );
 
 CREATE TABLE attempt_answer_tags (
     attempt_id UUID NOT NULL,
+    ticket_id UUID NOT NULL,
     tag_code TEXT NOT NULL,
-    PRIMARY KEY (attempt_id, tag_code)
+    PRIMARY KEY (attempt_id, ticket_id, tag_code)
 );
 
 CREATE TABLE attempt_answer_services (
     attempt_id UUID NOT NULL,
+    ticket_id UUID NOT NULL,
     service_code TEXT NOT NULL,
-    PRIMARY KEY (attempt_id, service_code)
+    PRIMARY KEY (attempt_id, ticket_id, service_code)
 );
 
 CREATE TABLE group_members (

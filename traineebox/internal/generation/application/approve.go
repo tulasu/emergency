@@ -13,24 +13,23 @@ import (
 )
 
 type ApproveJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
-	Catalog    repositories.Catalog
-	Publisher  repositories.TicketPublisher
+	Jobs      repositories.JobRepository
+	Catalog   repositories.Catalog
+	Publisher repositories.TicketPublisher
 }
 
 type ApproveJobInput struct {
 	ActorID uuid.UUID
-	Admin   bool
+	Role    value_objects.AccountRole
 	JobID   uuid.UUID
 }
 
 func (uc ApproveJob) Execute(ctx context.Context, in ApproveJobInput) (models.Job, error) {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
+	job, err := uc.Jobs.FindByID(ctx, in.JobID)
+	if err != nil {
 		return models.Job{}, err
 	}
 	expectedStatus := job.Status.String()
@@ -64,7 +63,8 @@ func (uc ApproveJob) Execute(ctx context.Context, in ApproveJobInput) (models.Jo
 	ticketID := uuid.New()
 	publishedID, err := uc.Publisher.Publish(ctx, repositories.PublishDraft{
 		TicketID:        ticketID,
-		GroupID:         job.GroupID,
+		VariantID:       job.VariantID,
+		TopicID:         job.TopicID,
 		Title:           title.String(),
 		Body:            job.ScenarioText,
 		CreatedBy:       in.ActorID,

@@ -15,61 +15,118 @@ import (
 	"github.com/google/uuid"
 )
 
-type StartAttempt struct {
-	Tickets    repositories.TicketRepository
+type GrantAttempt struct {
 	Attempts   repositories.AttemptRepository
-	Membership repositories.GroupMembership
+	Curriculum repositories.TopicExists
 }
 
-type StartAttemptInput struct {
-	ActorID  uuid.UUID
-	Admin    bool
-	TicketID uuid.UUID
+type GrantAttemptInput struct {
+	ActorID   uuid.UUID
+	Role      value_objects.AccountRole
+	UserID    uuid.UUID
+	VariantID uuid.UUID
 }
 
-func (uc StartAttempt) Execute(ctx context.Context, in StartAttemptInput) (models.Attempt, error) {
-	ticket, err := uc.Tickets.FindByID(ctx, in.TicketID)
+func (uc GrantAttempt) Execute(ctx context.Context, in GrantAttemptInput) (models.Attempt, error) {
+	if err := abilities.GrantAttempt(in.Role); err != nil {
+		return models.Attempt{}, err
+	}
+	if err := uc.Curriculum.VariantExists(ctx, in.VariantID); err != nil {
+		return models.Attempt{}, err
+	}
+	return issueAvailable(ctx, uc.Attempts, in.UserID, in.VariantID, in.ActorID)
+}
+
+func issueAvailable(ctx context.Context, attempts repositories.AttemptRepository, userID, variantID, grantedBy uuid.UUID) (models.Attempt, error) {
+	open, err := attempts.FindOpen(ctx, variantID, userID)
+	if err == nil {
+		return open, nil
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		return models.Attempt{}, err
+	}
+	no, err := attempts.NextAttemptNo(ctx, variantID, userID)
 	if err != nil {
 		return models.Attempt{}, err
 	}
-	if err := requireStudent(ctx, uc.Membership, ticket.GroupID, in.ActorID, in.Admin); err != nil {
-		return models.Attempt{}, err
-	}
-	_, inProgressErr := uc.Attempts.FindInProgress(ctx, ticket.ID, in.ActorID)
-	hasInProgress := inProgressErr == nil
-	if inProgressErr != nil && !errors.Is(inProgressErr, errs.ErrNotFound) {
-		return models.Attempt{}, inProgressErr
-	}
-	finished, err := uc.Attempts.CountFinished(ctx, ticket.ID, in.ActorID)
-	if err != nil {
-		return models.Attempt{}, err
-	}
-	now := time.Now().UTC()
-	if err := ticket.CanStartAttempt(now, finished, hasInProgress); err != nil {
-		return models.Attempt{}, err
-	}
-	no, err := uc.Attempts.NextAttemptNo(ctx, ticket.ID, in.ActorID)
-	if err != nil {
-		return models.Attempt{}, err
-	}
-	attempt := models.NewAttempt(ticket.ID, in.ActorID, no, now, ticket.DeadlineFor(now))
-	if err := uc.Attempts.Create(ctx, attempt); err != nil {
+	attempt := models.NewAvailableAttempt(variantID, userID, grantedBy, no)
+	if err := attempts.Create(ctx, attempt); err != nil {
+		if errors.Is(err, errs.ErrConflict) {
+			return attempts.FindOpen(ctx, variantID, userID)
+		}
 		return models.Attempt{}, err
 	}
 	return attempt, nil
 }
 
-type SaveAttemptAnswer struct {
+type IssueAvailable struct {
+	Attempts repositories.AttemptRepository
+}
+
+func (uc IssueAvailable) IssueAvailable(ctx context.Context, userID, variantID, grantedBy uuid.UUID) error {
+	_, err := issueAvailable(ctx, uc.Attempts, userID, variantID, grantedBy)
+	return err
+}
+
+type StartAttempt struct {
 	Tickets    repositories.TicketRepository
 	Attempts   repositories.AttemptRepository
-	Catalog    repositories.CatalogRepository
-	Membership repositories.GroupMembership
+	Curriculum repositories.LessonClock
+}
+
+type StartAttemptInput struct {
+	ActorID   uuid.UUID
+	Role      value_objects.AccountRole
+	AttemptID uuid.UUID
+}
+
+func (uc StartAttempt) Execute(ctx context.Context, in StartAttemptInput) (models.Attempt, error) {
+	if err := abilities.StartAttempt(in.Role); err != nil {
+		return models.Attempt{}, err
+	}
+	attempt, err := uc.Attempts.FindByID(ctx, in.AttemptID)
+	if err != nil {
+		return models.Attempt{}, err
+	}
+	if attempt.UserID != in.ActorID {
+		return models.Attempt{}, errs.ErrForbidden
+	}
+	now := time.Now().UTC()
+	if attempt.IsExpired(now) {
+		return expireAttempt(ctx, uc.Attempts, uc.Tickets, nil, attempt, now)
+	}
+	duration, err := uc.Curriculum.DurationSecondsByVariant(ctx, attempt.VariantID)
+	if err != nil {
+		return models.Attempt{}, err
+	}
+	if err := attempt.Start(now, deadlineFor(now, duration)); err != nil {
+		return models.Attempt{}, err
+	}
+	if err := uc.Attempts.Save(ctx, attempt); err != nil {
+		return models.Attempt{}, err
+	}
+	return attempt, nil
+}
+
+func deadlineFor(startedAt time.Time, durationSeconds *int) *time.Time {
+	if durationSeconds == nil {
+		return nil
+	}
+	d := startedAt.Add(time.Duration(*durationSeconds) * time.Second)
+	return &d
+}
+
+type SaveAttemptAnswer struct {
+	Tickets  repositories.TicketRepository
+	Attempts repositories.AttemptRepository
+	Catalog  repositories.CatalogRepository
 }
 
 type SaveAttemptAnswerInput struct {
 	ActorID            uuid.UUID
-	Admin              bool
+	Role               value_objects.AccountRole
 	AttemptID          uuid.UUID
+	TicketID           uuid.UUID
 	IncidentTypeCode   *string
 	TagCodes           []string
 	ServiceCodes       []string
@@ -81,14 +138,20 @@ type SaveAttemptAnswerInput struct {
 }
 
 func (uc SaveAttemptAnswer) Execute(ctx context.Context, in SaveAttemptAnswerInput) (models.Attempt, error) {
-	attempt, ticket, err := loadOwnAttempt(ctx, uc.Attempts, uc.Tickets, uc.Membership, in.AttemptID, in.ActorID, in.Admin)
+	attempt, err := loadOwnAttempt(ctx, uc.Attempts, in.AttemptID, in.ActorID, in.Role)
 	if err != nil {
 		return models.Attempt{}, err
 	}
-	_ = ticket
+	ticket, err := uc.Tickets.FindByID(ctx, in.TicketID)
+	if err != nil {
+		return models.Attempt{}, err
+	}
+	if ticket.VariantID != attempt.VariantID {
+		return models.Attempt{}, errs.ErrInvalidInput
+	}
 	now := time.Now().UTC()
 	if attempt.IsExpired(now) {
-		return expireAttempt(ctx, uc.Tickets, uc.Attempts, attempt, now)
+		return expireAttempt(ctx, uc.Attempts, uc.Tickets, nil, attempt, now)
 	}
 	notes, err := value_objects.NewNotes(in.Notes)
 	if err != nil {
@@ -101,7 +164,7 @@ func (uc SaveAttemptAnswer) Execute(ctx context.Context, in SaveAttemptAnswerInp
 	if err := validateAnswer(ctx, uc.Catalog, answer); err != nil {
 		return models.Attempt{}, err
 	}
-	if err := attempt.SaveDraft(answer, now); err != nil {
+	if err := attempt.SaveDraft(in.TicketID, answer, now); err != nil {
 		return models.Attempt{}, err
 	}
 	if err := uc.Attempts.Save(ctx, attempt); err != nil {
@@ -111,35 +174,30 @@ func (uc SaveAttemptAnswer) Execute(ctx context.Context, in SaveAttemptAnswerInp
 }
 
 type SubmitAttempt struct {
-	Tickets    repositories.TicketRepository
-	Attempts   repositories.AttemptRepository
-	Catalog    repositories.CatalogRepository
-	Membership repositories.GroupMembership
+	Tickets  repositories.TicketRepository
+	Attempts repositories.AttemptRepository
 }
 
 type SubmitAttemptInput struct {
 	ActorID   uuid.UUID
-	Admin     bool
+	Role      value_objects.AccountRole
 	AttemptID uuid.UUID
 }
 
 func (uc SubmitAttempt) Execute(ctx context.Context, in SubmitAttemptInput) (models.Attempt, error) {
-	attempt, _, err := loadOwnAttempt(ctx, uc.Attempts, uc.Tickets, uc.Membership, in.AttemptID, in.ActorID, in.Admin)
+	attempt, err := loadOwnAttempt(ctx, uc.Attempts, in.AttemptID, in.ActorID, in.Role)
 	if err != nil {
 		return models.Attempt{}, err
 	}
 	now := time.Now().UTC()
 	if attempt.IsExpired(now) {
-		return expireAttempt(ctx, uc.Tickets, uc.Attempts, attempt, now)
+		return expireAttempt(ctx, uc.Attempts, uc.Tickets, nil, attempt, now)
 	}
-	ref, err := uc.Tickets.FindReference(ctx, attempt.TicketID)
+	report, err := buildAttemptReport(ctx, uc.Tickets, attempt)
 	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return models.Attempt{}, errs.ErrNoReferenceAnswer
-		}
 		return models.Attempt{}, err
 	}
-	if err := attempt.Submit(now, ref, scoring.Score); err != nil {
+	if err := attempt.Submit(now, report, report.OverallScore); err != nil {
 		return models.Attempt{}, err
 	}
 	if err := uc.Attempts.Save(ctx, attempt); err != nil {
@@ -149,90 +207,101 @@ func (uc SubmitAttempt) Execute(ctx context.Context, in SubmitAttemptInput) (mod
 }
 
 type GetMyAttempt struct {
-	Tickets    repositories.TicketRepository
-	Attempts   repositories.AttemptRepository
-	Membership repositories.GroupMembership
+	Tickets  repositories.TicketRepository
+	Attempts repositories.AttemptRepository
 }
 
 type GetMyAttemptInput struct {
 	ActorID   uuid.UUID
-	Admin     bool
+	Role      value_objects.AccountRole
 	AttemptID uuid.UUID
 }
 
 func (uc GetMyAttempt) Execute(ctx context.Context, in GetMyAttemptInput) (models.Attempt, error) {
-	attempt, _, err := loadOwnAttempt(ctx, uc.Attempts, uc.Tickets, uc.Membership, in.AttemptID, in.ActorID, in.Admin)
+	attempt, err := loadOwnAttempt(ctx, uc.Attempts, in.AttemptID, in.ActorID, in.Role)
 	if err != nil {
 		return models.Attempt{}, err
 	}
 	now := time.Now().UTC()
 	if attempt.IsExpired(now) {
-		return expireAttempt(ctx, uc.Tickets, uc.Attempts, attempt, now)
+		return expireAttempt(ctx, uc.Attempts, uc.Tickets, nil, attempt, now)
 	}
 	return attempt, nil
 }
 
 type ListMyAttempts struct {
-	Tickets    repositories.TicketRepository
-	Attempts   repositories.AttemptRepository
-	Membership repositories.GroupMembership
+	Attempts repositories.AttemptRepository
 }
 
 type ListMyAttemptsInput struct {
-	ActorID  uuid.UUID
-	Admin    bool
-	TicketID uuid.UUID
+	ActorID   uuid.UUID
+	Role      value_objects.AccountRole
+	VariantID uuid.UUID
 }
 
 func (uc ListMyAttempts) Execute(ctx context.Context, in ListMyAttemptsInput) ([]models.Attempt, error) {
-	ticket, err := uc.Tickets.FindByID(ctx, in.TicketID)
-	if err != nil {
+	if err := abilities.ViewOwnAttempt(in.Role); err != nil {
 		return nil, err
 	}
-	if err := requireViewOwn(ctx, uc.Membership, ticket.GroupID, in.ActorID, in.Admin); err != nil {
-		return nil, err
+	if in.Role == value_objects.AccountRoleStudent {
+		return uc.Attempts.ListByVariantUser(ctx, in.VariantID, in.ActorID)
 	}
-	attempts, err := uc.Attempts.ListByTicketUser(ctx, in.TicketID, in.ActorID)
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC()
-	out := make([]models.Attempt, 0, len(attempts))
-	for _, a := range attempts {
-		if a.IsExpired(now) {
-			expired, err := expireAttempt(ctx, uc.Tickets, uc.Attempts, a, now)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, expired)
-			continue
-		}
-		out = append(out, a)
-	}
-	return out, nil
+	return uc.Attempts.ListByVariantUser(ctx, in.VariantID, in.ActorID)
+}
+
+type GetAttemptReport struct {
+	Attempts repositories.AttemptRepository
+}
+
+func (uc GetAttemptReport) Execute(ctx context.Context, actorID uuid.UUID, role value_objects.AccountRole, attemptID uuid.UUID) (models.Attempt, error) {
+	return loadOwnAttempt(ctx, uc.Attempts, attemptID, actorID, role)
 }
 
 func expireAttempt(
 	ctx context.Context,
-	tickets repositories.TicketRepository,
 	attempts repositories.AttemptRepository,
+	tickets repositories.TicketRepository,
+	_ repositories.CatalogRepository,
 	attempt models.Attempt,
 	now time.Time,
 ) (models.Attempt, error) {
-	ref, err := tickets.FindReference(ctx, attempt.TicketID)
-	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return models.Attempt{}, errs.ErrNoReferenceAnswer
+	report := models.EmptyReport()
+	if tickets != nil {
+		built, err := buildAttemptReport(ctx, tickets, attempt)
+		if err != nil {
+			return models.Attempt{}, err
 		}
-		return models.Attempt{}, err
+		report = built
 	}
-	if err := attempt.Expire(now, ref, scoring.Score); err != nil {
+	if err := attempt.Expire(now, report, report.OverallScore); err != nil {
 		return models.Attempt{}, err
 	}
 	if err := attempts.Save(ctx, attempt); err != nil {
 		return models.Attempt{}, err
 	}
 	return attempt, nil
+}
+
+func buildAttemptReport(ctx context.Context, tickets repositories.TicketRepository, attempt models.Attempt) (models.Report, error) {
+	list, err := tickets.ListByVariant(ctx, attempt.VariantID)
+	if err != nil {
+		return models.Report{}, err
+	}
+	if len(list) == 0 {
+		return models.Report{}, errs.ErrInvalidInput
+	}
+	refs := make(map[uuid.UUID]models.ReferenceAnswer, len(list))
+	for _, t := range list {
+		ref, err := tickets.FindReference(ctx, t.ID)
+		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) {
+				return models.Report{}, errs.ErrNoReferenceAnswer
+			}
+			return models.Report{}, err
+		}
+		refs[t.ID] = ref
+	}
+	return scoring.BuildReport(list, refs, attempt.Answers)
 }
 
 func validateAnswer(ctx context.Context, catalog repositories.CatalogRepository, answer models.Answer) error {
@@ -265,46 +334,19 @@ func validateAnswer(ctx context.Context, catalog repositories.CatalogRepository,
 func loadOwnAttempt(
 	ctx context.Context,
 	attempts repositories.AttemptRepository,
-	tickets repositories.TicketRepository,
-	membership repositories.GroupMembership,
 	attemptID, actorID uuid.UUID,
-	admin bool,
-) (models.Attempt, models.Ticket, error) {
+	role value_objects.AccountRole,
+) (models.Attempt, error) {
 	attempt, err := attempts.FindByID(ctx, attemptID)
 	if err != nil {
-		return models.Attempt{}, models.Ticket{}, err
+		return models.Attempt{}, err
 	}
-	if attempt.UserID != actorID && !admin {
-		return models.Attempt{}, models.Ticket{}, errs.ErrForbidden
+	if attempt.UserID != actorID {
+		if err := abilities.ViewAnyAttempt(role); err != nil {
+			return models.Attempt{}, errs.ErrForbidden
+		}
+	} else if err := abilities.ViewOwnAttempt(role); err != nil {
+		return models.Attempt{}, err
 	}
-	ticket, err := tickets.FindByID(ctx, attempt.TicketID)
-	if err != nil {
-		return models.Attempt{}, models.Ticket{}, err
-	}
-	if err := requireViewOwn(ctx, membership, ticket.GroupID, actorID, admin); err != nil {
-		return models.Attempt{}, models.Ticket{}, err
-	}
-	return attempt, ticket, nil
-}
-
-func requireStudent(ctx context.Context, membership repositories.GroupMembership, groupID, actorID uuid.UUID, admin bool) error {
-	if admin {
-		return abilities.StartAttempt("", true)
-	}
-	role, err := membership.RoleOf(ctx, groupID, actorID)
-	if err != nil {
-		return err
-	}
-	return abilities.StartAttempt(role, false)
-}
-
-func requireViewOwn(ctx context.Context, membership repositories.GroupMembership, groupID, actorID uuid.UUID, admin bool) error {
-	if admin {
-		return abilities.ViewOwnAttempt("", true)
-	}
-	role, err := membership.RoleOf(ctx, groupID, actorID)
-	if err != nil {
-		return err
-	}
-	return abilities.ViewOwnAttempt(role, false)
+	return attempt, nil
 }

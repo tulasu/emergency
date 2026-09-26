@@ -14,7 +14,7 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-generation-job",
 		Method:      http.MethodPost,
-		Path:        "/groups/{groupId}/generation-jobs",
+		Path:        "/variants/{variantId}/generation-jobs",
 		Summary:     "Create ticket generation job",
 		Tags:        []string{"Generation"},
 		Security:    []map[string][]string{{"session": {}}},
@@ -23,7 +23,7 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-generation-jobs",
 		Method:      http.MethodGet,
-		Path:        "/groups/{groupId}/generation-jobs",
+		Path:        "/variants/{variantId}/generation-jobs",
 		Summary:     "List ticket generation jobs",
 		Tags:        []string{"Generation"},
 		Security:    []map[string][]string{{"session": {}}},
@@ -86,9 +86,10 @@ func Register(api huma.API, a *API) {
 
 func (a *API) createJobHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
-	GroupID       uuid.UUID `path:"groupId"`
+	VariantID     uuid.UUID `path:"variantId"`
 	Body          struct {
-		Prompt string `json:"prompt" minLength:"1"`
+		Prompt  string    `json:"prompt" minLength:"1"`
+		TopicID uuid.UUID `json:"topic_id" format:"uuid"`
 	}
 }) (*struct {
 	Body jobDTO
@@ -98,7 +99,7 @@ func (a *API) createJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.createJob.Execute(ctx, application.CreateJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), GroupID: in.GroupID, Prompt: in.Body.Prompt,
+		ActorID: user.ID, Role: user.Role, VariantID: in.VariantID, TopicID: in.Body.TopicID, Prompt: in.Body.Prompt,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -108,7 +109,7 @@ func (a *API) createJobHandler(ctx context.Context, in *struct {
 
 func (a *API) listJobsHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
-	GroupID       uuid.UUID `path:"groupId"`
+	VariantID     uuid.UUID `path:"variantId"`
 }) (*struct {
 	Body []jobDTO
 }, error) {
@@ -117,7 +118,7 @@ func (a *API) listJobsHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	jobs, err := a.listJobs.Execute(ctx, application.ListJobsInput{
-		ActorID: user.ID, Admin: isAdmin(user), GroupID: in.GroupID,
+		Role: user.Role, VariantID: in.VariantID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -140,7 +141,7 @@ func (a *API) getJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.getJob.Execute(ctx, application.GetJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), JobID: in.JobID,
+		Role: user.Role, JobID: in.JobID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -164,8 +165,7 @@ func (a *API) patchJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.patchJob.Execute(ctx, application.PatchJobInput{
-		ActorID:      user.ID,
-		Admin:        isAdmin(user),
+		Role:         user.Role,
 		JobID:        in.JobID,
 		DraftTitle:   in.Body.DraftTitle,
 		ScenarioText: in.Body.ScenarioText,
@@ -188,7 +188,7 @@ func (a *API) retryJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.retryJob.Execute(ctx, application.RetryJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), JobID: in.JobID,
+		Role: user.Role, JobID: in.JobID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -207,7 +207,7 @@ func (a *API) cancelJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.cancelJob.Execute(ctx, application.CancelJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), JobID: in.JobID,
+		Role: user.Role, JobID: in.JobID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -224,7 +224,7 @@ func (a *API) deleteJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	if err := a.deleteJob.Execute(ctx, application.DeleteJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), JobID: in.JobID,
+		Role: user.Role, JobID: in.JobID,
 	}); err != nil {
 		return nil, mapError(err)
 	}
@@ -242,7 +242,7 @@ func (a *API) approveJobHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	job, err := a.approveJob.Execute(ctx, application.ApproveJobInput{
-		ActorID: user.ID, Admin: isAdmin(user), JobID: in.JobID,
+		ActorID: user.ID, Role: user.Role, JobID: in.JobID,
 	})
 	if err != nil {
 		return nil, mapError(err)

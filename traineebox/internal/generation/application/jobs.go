@@ -21,34 +21,34 @@ type Authenticator interface {
 	CurrentUser(ctx context.Context, token string) (SessionUser, error)
 }
 
-func requireManage(ctx context.Context, membership repositories.GroupMembership, groupID, actorID uuid.UUID, admin bool) error {
-	if admin {
-		return abilities.ManageTicket("", true)
-	}
-	role, err := membership.RoleOf(ctx, groupID, actorID)
-	if err != nil {
-		return err
-	}
-	return abilities.ManageTicket(role, false)
+func requireManage(role value_objects.AccountRole) error {
+	return abilities.ManageJob(role)
 }
 
 type CreateJob struct {
 	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Curriculum repositories.CurriculumExists
 }
 
 type CreateJobInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	GroupID uuid.UUID
-	Prompt  string
+	ActorID   uuid.UUID
+	Role      value_objects.AccountRole
+	VariantID uuid.UUID
+	TopicID   uuid.UUID
+	Prompt    string
 }
 
 func (uc CreateJob) Execute(ctx context.Context, in CreateJobInput) (models.Job, error) {
-	if err := requireManage(ctx, uc.Membership, in.GroupID, in.ActorID, in.Admin); err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	job, err := models.NewJob(in.GroupID, in.ActorID, in.Prompt)
+	if err := uc.Curriculum.VariantExists(ctx, in.VariantID); err != nil {
+		return models.Job{}, err
+	}
+	if err := uc.Curriculum.TopicExists(ctx, in.TopicID); err != nil {
+		return models.Job{}, err
+	}
+	job, err := models.NewJob(in.VariantID, in.TopicID, in.ActorID, in.Prompt)
 	if err != nil {
 		return models.Job{}, err
 	}
@@ -59,53 +59,43 @@ func (uc CreateJob) Execute(ctx context.Context, in CreateJobInput) (models.Job,
 }
 
 type ListJobs struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type ListJobsInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	GroupID uuid.UUID
+	Role      value_objects.AccountRole
+	VariantID uuid.UUID
 }
 
 func (uc ListJobs) Execute(ctx context.Context, in ListJobsInput) ([]models.Job, error) {
-	if err := requireManage(ctx, uc.Membership, in.GroupID, in.ActorID, in.Admin); err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return nil, err
 	}
-	return uc.Jobs.ListByGroup(ctx, in.GroupID)
+	return uc.Jobs.ListByVariant(ctx, in.VariantID)
 }
 
 type GetJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type GetJobInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	JobID   uuid.UUID
+	Role  value_objects.AccountRole
+	JobID uuid.UUID
 }
 
 func (uc GetJob) Execute(ctx context.Context, in GetJobInput) (models.Job, error) {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
-		return models.Job{}, err
-	}
-	return job, nil
+	return uc.Jobs.FindByID(ctx, in.JobID)
 }
 
 type PatchJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type PatchJobInput struct {
-	ActorID      uuid.UUID
-	Admin        bool
+	Role         value_objects.AccountRole
 	JobID        uuid.UUID
 	DraftTitle   string
 	ScenarioText string
@@ -113,11 +103,11 @@ type PatchJobInput struct {
 }
 
 func (uc PatchJob) Execute(ctx context.Context, in PatchJobInput) (models.Job, error) {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
+	job, err := uc.Jobs.FindByID(ctx, in.JobID)
+	if err != nil {
 		return models.Job{}, err
 	}
 	expectedStatus := job.Status.String()
@@ -133,22 +123,20 @@ func (uc PatchJob) Execute(ctx context.Context, in PatchJobInput) (models.Job, e
 }
 
 type RetryJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type RetryJobInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	JobID   uuid.UUID
+	Role  value_objects.AccountRole
+	JobID uuid.UUID
 }
 
 func (uc RetryJob) Execute(ctx context.Context, in RetryJobInput) (models.Job, error) {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
+	job, err := uc.Jobs.FindByID(ctx, in.JobID)
+	if err != nil {
 		return models.Job{}, err
 	}
 	expectedStatus := job.Status.String()
@@ -164,22 +152,20 @@ func (uc RetryJob) Execute(ctx context.Context, in RetryJobInput) (models.Job, e
 }
 
 type CancelJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type CancelJobInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	JobID   uuid.UUID
+	Role  value_objects.AccountRole
+	JobID uuid.UUID
 }
 
 func (uc CancelJob) Execute(ctx context.Context, in CancelJobInput) (models.Job, error) {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return models.Job{}, err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
+	job, err := uc.Jobs.FindByID(ctx, in.JobID)
+	if err != nil {
 		return models.Job{}, err
 	}
 	expectedStatus := job.Status.String()
@@ -195,22 +181,20 @@ func (uc CancelJob) Execute(ctx context.Context, in CancelJobInput) (models.Job,
 }
 
 type DeleteJob struct {
-	Jobs       repositories.JobRepository
-	Membership repositories.GroupMembership
+	Jobs repositories.JobRepository
 }
 
 type DeleteJobInput struct {
-	ActorID uuid.UUID
-	Admin   bool
-	JobID   uuid.UUID
+	Role  value_objects.AccountRole
+	JobID uuid.UUID
 }
 
 func (uc DeleteJob) Execute(ctx context.Context, in DeleteJobInput) error {
-	job, err := uc.Jobs.FindByID(ctx, in.JobID)
-	if err != nil {
+	if err := requireManage(in.Role); err != nil {
 		return err
 	}
-	if err := requireManage(ctx, uc.Membership, job.GroupID, in.ActorID, in.Admin); err != nil {
+	job, err := uc.Jobs.FindByID(ctx, in.JobID)
+	if err != nil {
 		return err
 	}
 	if !job.Status.CanDelete() {

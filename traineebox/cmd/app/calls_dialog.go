@@ -75,7 +75,14 @@ func wireCallsAndDialog(
 			if actorID != uuid.Nil && actorID != attempt.UserID {
 				return uuid.Nil, uuid.Nil, nil, "", callserrs.ErrForbidden
 			}
-			return attempt.TicketID, attempt.UserID, attempt.DeadlineAt, attempt.Status.String(), nil
+			tickets, err := ticketsRepo.ListByVariant(ctx, attempt.VariantID)
+			if err != nil {
+				return uuid.Nil, uuid.Nil, nil, "", mapTicketsToCalls(err)
+			}
+			if len(tickets) == 0 {
+				return uuid.Nil, uuid.Nil, nil, "", callserrs.ErrNotFound
+			}
+			return tickets[0].ID, attempt.UserID, attempt.DeadlineAt, attempt.Status.String(), nil
 		},
 		LoadTicket: func(ctx context.Context, ticketID uuid.UUID) (string, string, string, error) {
 			ticket, err := ticketsRepo.FindByID(ctx, ticketID)

@@ -24,15 +24,11 @@ func NewJobRepository(pool *pgxpool.Pool) *JobRepository {
 	return &JobRepository{q: generationsql.New(pool), pool: pool}
 }
 
-// ClaimNext atomically claims one queued (or lease-expired in-progress) job
-// for building_dialog/checking_dialog driving. SKIP LOCKED lets N workers
-// share the queue. Nothing else drives these statuses (spec K).
 func (r *JobRepository) ClaimNext(ctx context.Context, workerID string, leaseSeconds int) (models.Job, bool, error) {
 	if leaseSeconds <= 0 {
 		leaseSeconds = 120
 	}
 	var row generationsql.TicketGenerationJob
-	// pgx maps the row via the generated scanner: reuse GetGenerationJobByID shape.
 	err := r.pool.QueryRow(ctx,
 		`UPDATE ticket_generation_jobs AS j SET
 			status = 'building_dialog',
@@ -50,11 +46,11 @@ func (r *JobRepository) ClaimNext(ctx context.Context, workerID string, leaseSec
 				'building_services','building_dialog','checking_dialog','building_ref')
 				AND lease_until IS NOT NULL AND lease_until < now())
 			ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
-		RETURNING id, group_id, created_by, prompt, status, version, scenario_text,
+		RETURNING id, variant_id, topic_id, created_by, prompt, status, version, scenario_text,
 			draft_title, draft_reference, error_message, attempts, published_ticket_id,
 			claimed_by, claimed_at, lease_until, created_at, updated_at`,
 		workerID, leaseSeconds).Scan(
-		&row.ID, &row.GroupID, &row.CreatedBy, &row.Prompt, &row.Status, &row.Version,
+		&row.ID, &row.VariantID, &row.TopicID, &row.CreatedBy, &row.Prompt, &row.Status, &row.Version,
 		&row.ScenarioText, &row.DraftTitle, &row.DraftReference, &row.ErrorMessage,
 		&row.Attempts, &row.PublishedTicketID, &row.ClaimedBy, &row.ClaimedAt,
 		&row.LeaseUntil, &row.CreatedAt, &row.UpdatedAt)
@@ -78,7 +74,8 @@ func (r *JobRepository) Create(ctx context.Context, job models.Job) error {
 	}
 	return r.q.CreateGenerationJob(ctx, generationsql.CreateGenerationJobParams{
 		ID:                job.ID,
-		GroupID:           job.GroupID,
+		VariantID:         job.VariantID,
+		TopicID:           job.TopicID,
 		CreatedBy:         job.CreatedBy,
 		Prompt:            job.Prompt,
 		Status:            job.Status.String(),
@@ -108,8 +105,8 @@ func (r *JobRepository) FindByID(ctx context.Context, id uuid.UUID) (models.Job,
 	return mapJob(row)
 }
 
-func (r *JobRepository) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]models.Job, error) {
-	rows, err := r.q.ListGenerationJobsByGroup(ctx, groupID)
+func (r *JobRepository) ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Job, error) {
+	rows, err := r.q.ListGenerationJobsByVariant(ctx, variantID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +169,8 @@ func mapJob(row generationsql.TicketGenerationJob) (models.Job, error) {
 	ref = ref.Normalize()
 	return models.Job{
 		ID:                row.ID,
-		GroupID:           row.GroupID,
+		VariantID:         row.VariantID,
+		TopicID:           row.TopicID,
 		CreatedBy:         row.CreatedBy,
 		Prompt:            row.Prompt,
 		Status:            status,

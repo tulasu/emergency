@@ -14,6 +14,7 @@ type Config struct {
 	SessionSecret string
 	SessionTTL    time.Duration
 	CatalogPath   string
+	MediaPath     string
 }
 
 func Load() (Config, error) {
@@ -23,6 +24,7 @@ func Load() (Config, error) {
 		SessionSecret: envOr("TRAINEEBOX_SESSION_SECRET", "dev-session-secret-change-me"),
 		SessionTTL:    24 * time.Hour,
 		CatalogPath:   envOr("TRAINEEBOX_CATALOG_PATH", defaultCatalogPath()),
+		MediaPath:     envOr("TRAINEEBOX_MEDIA_PATH", defaultMediaPath()),
 	}
 	if v := os.Getenv("TRAINEEBOX_SESSION_TTL_HOURS"); v != "" {
 		h, err := strconv.Atoi(v)
@@ -42,6 +44,27 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func defaultMediaPath() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return filepath.Clean("../artifacts/var/traineebox/media")
+	}
+	dir := wd
+	for i := 0; i < 8; i++ {
+		candidate := filepath.Join(dir, "artifacts", "var", "traineebox", "media")
+		parent := filepath.Join(dir, "artifacts")
+		if _, err := os.Stat(parent); err == nil {
+			return candidate
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			break
+		}
+		dir = next
+	}
+	return filepath.Clean("../artifacts/var/traineebox/media")
 }
 
 func defaultCatalogPath() string {

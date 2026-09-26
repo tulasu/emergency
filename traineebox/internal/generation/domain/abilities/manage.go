@@ -5,14 +5,9 @@ import (
 	"traineebox/internal/generation/domain/value_objects"
 )
 
-func ManageTicket(actor value_objects.MemberRole, admin bool) error {
-	if admin {
+func ManageJob(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher {
 		return nil
 	}
-	switch actor {
-	case value_objects.MemberRoleOwner, value_objects.MemberRoleTeacher:
-		return nil
-	default:
-		return errs.ErrForbidden
-	}
+	return errs.ErrForbidden
 }

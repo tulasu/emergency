@@ -27,12 +27,11 @@ func ApproveAtomically(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO tickets (id, group_id, title, body, max_attempts, available_from, available_until,
-			duration_seconds, created_by, created_at, scenario, scenario_version, mode, briefing)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, $11::jsonb, $12, $13, $14)`,
-		draft.TicketID, draft.GroupID, draft.Title, draft.Body,
-		nil, nil, nil,
-		nil, draft.CreatedBy, draft.CreatedAt,
+		`INSERT INTO tickets (id, variant_id, topic_id, title, body, created_by, created_at,
+			scenario, scenario_version, mode, briefing)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7, $8::jsonb, $9, $10, $11)`,
+		draft.TicketID, draft.VariantID, draft.TopicID, draft.Title, draft.Body,
+		draft.CreatedBy, draft.CreatedAt,
 		scenarioJSON, draft.ScenarioVersion, firstNonEmpty(draft.Mode, "voice"), draft.Briefing,
 	); err != nil {
 		return err

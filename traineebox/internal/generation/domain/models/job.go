@@ -12,7 +12,8 @@ import (
 
 type Job struct {
 	ID                uuid.UUID
-	GroupID           uuid.UUID
+	VariantID         uuid.UUID
+	TopicID           uuid.UUID
 	CreatedBy         uuid.UUID
 	Prompt            string
 	Status            value_objects.JobStatus
@@ -30,7 +31,7 @@ type Job struct {
 	UpdatedAt         time.Time
 }
 
-func NewJob(groupID, createdBy uuid.UUID, prompt string) (Job, error) {
+func NewJob(variantID, topicID, createdBy uuid.UUID, prompt string) (Job, error) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return Job{}, errs.ErrInvalidInput
@@ -38,7 +39,8 @@ func NewJob(groupID, createdBy uuid.UUID, prompt string) (Job, error) {
 	now := time.Now().UTC()
 	return Job{
 		ID:             uuid.New(),
-		GroupID:        groupID,
+		VariantID:      variantID,
+		TopicID:        topicID,
 		CreatedBy:      createdBy,
 		Prompt:         prompt,
 		Status:         value_objects.JobStatusQueued,

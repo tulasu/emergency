@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -26,43 +27,29 @@ func NewAttemptRepository(pool *pgxpool.Pool) *AttemptRepository {
 }
 
 func (r *AttemptRepository) Create(ctx context.Context, attempt models.Attempt) error {
-	tx, err := r.pool.Begin(ctx)
+	report, err := json.Marshal(attempt.Report)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := r.q.WithTx(tx)
-	if err := q.CreateAttempt(ctx, ticketssql.CreateAttemptParams{
+	if err := r.q.CreateAttempt(ctx, ticketssql.CreateAttemptParams{
 		ID:         attempt.ID,
-		TicketID:   attempt.TicketID,
+		VariantID:  attempt.VariantID,
 		UserID:     attempt.UserID,
+		GrantedBy:  attempt.GrantedBy,
 		AttemptNo:  int32(attempt.AttemptNo),
 		Status:     attempt.Status.String(),
 		StartedAt:  attempt.StartedAt,
 		DeadlineAt: attempt.DeadlineAt,
 		FinishedAt: attempt.FinishedAt,
 		Score:      intPtrToInt16(attempt.Score),
+		Report:     report,
 	}); err != nil {
 		if isUniqueViolation(err) {
 			return errs.ErrConflict
 		}
 		return err
 	}
-	now := time.Now().UTC()
-	if err := q.CreateAttemptAnswer(ctx, ticketssql.CreateAttemptAnswerParams{
-		AttemptID:          attempt.ID,
-		IncidentTypeCode:   attempt.Answer.IncidentTypeCode,
-		ApplicantLastName:  attempt.Answer.ApplicantLastName,
-		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
-		CallerNumber:       attempt.Answer.CallerNumber,
-		DictatedNumber:     attempt.Answer.DictatedNumber,
-		Notes:              attempt.Answer.Notes.String(),
-		UpdatedAt:          now,
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (r *AttemptRepository) FindByID(ctx context.Context, id uuid.UUID) (models.Attempt, error) {
@@ -76,10 +63,8 @@ func (r *AttemptRepository) FindByID(ctx context.Context, id uuid.UUID) (models.
 	return r.loadAttempt(ctx, row)
 }
 
-func (r *AttemptRepository) FindInProgress(ctx context.Context, ticketID, userID uuid.UUID) (models.Attempt, error) {
-	row, err := r.q.FindInProgressAttempt(ctx, ticketssql.FindInProgressAttemptParams{
-		TicketID: ticketID, UserID: userID,
-	})
+func (r *AttemptRepository) FindOpen(ctx context.Context, variantID, userID uuid.UUID) (models.Attempt, error) {
+	row, err := r.q.FindOpenAttempt(ctx, ticketssql.FindOpenAttemptParams{VariantID: variantID, UserID: userID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Attempt{}, errs.ErrNotFound
@@ -89,35 +74,30 @@ func (r *AttemptRepository) FindInProgress(ctx context.Context, ticketID, userID
 	return r.loadAttempt(ctx, row)
 }
 
-func (r *AttemptRepository) ListByTicketUser(ctx context.Context, ticketID, userID uuid.UUID) ([]models.Attempt, error) {
-	rows, err := r.q.ListAttemptsByTicketUser(ctx, ticketssql.ListAttemptsByTicketUserParams{
-		TicketID: ticketID, UserID: userID,
+func (r *AttemptRepository) ListByVariantUser(ctx context.Context, variantID, userID uuid.UUID) ([]models.Attempt, error) {
+	rows, err := r.q.ListAttemptsByVariantUser(ctx, ticketssql.ListAttemptsByVariantUserParams{
+		VariantID: variantID, UserID: userID,
 	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]models.Attempt, 0, len(rows))
-	for _, row := range rows {
-		a, err := r.loadAttempt(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, a)
+	return r.loadAttempts(ctx, rows)
+}
+
+func (r *AttemptRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]models.Attempt, error) {
+	rows, err := r.q.ListAttemptsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	return r.loadAttempts(ctx, rows)
 }
 
-func (r *AttemptRepository) CountFinished(ctx context.Context, ticketID, userID uuid.UUID) (int, error) {
-	n, err := r.q.CountFinishedAttempts(ctx, ticketssql.CountFinishedAttemptsParams{
-		TicketID: ticketID, UserID: userID,
-	})
-	return int(n), err
+func (r *AttemptRepository) HasAny(ctx context.Context, variantID, userID uuid.UUID) (bool, error) {
+	return r.q.HasAnyAttempt(ctx, ticketssql.HasAnyAttemptParams{VariantID: variantID, UserID: userID})
 }
 
-func (r *AttemptRepository) NextAttemptNo(ctx context.Context, ticketID, userID uuid.UUID) (int, error) {
-	n, err := r.q.MaxAttemptNo(ctx, ticketssql.MaxAttemptNoParams{
-		TicketID: ticketID, UserID: userID,
-	})
+func (r *AttemptRepository) NextAttemptNo(ctx context.Context, variantID, userID uuid.UUID) (int, error) {
+	n, err := r.q.MaxAttemptNo(ctx, ticketssql.MaxAttemptNoParams{VariantID: variantID, UserID: userID})
 	if err != nil {
 		return 0, err
 	}
@@ -132,53 +112,64 @@ func (r *AttemptRepository) Save(ctx context.Context, attempt models.Attempt) er
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := r.q.WithTx(tx)
+	report, err := json.Marshal(attempt.Report)
+	if err != nil {
+		return err
+	}
 	if err := q.UpdateAttempt(ctx, ticketssql.UpdateAttemptParams{
 		ID:         attempt.ID,
 		Status:     attempt.Status.String(),
+		StartedAt:  attempt.StartedAt,
+		DeadlineAt: attempt.DeadlineAt,
 		FinishedAt: attempt.FinishedAt,
 		Score:      intPtrToInt16(attempt.Score),
+		Report:     report,
 	}); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	if err := q.UpdateAttemptAnswer(ctx, ticketssql.UpdateAttemptAnswerParams{
-		AttemptID:          attempt.ID,
-		IncidentTypeCode:   attempt.Answer.IncidentTypeCode,
-		ApplicantLastName:  attempt.Answer.ApplicantLastName,
-		ApplicantFirstName: attempt.Answer.ApplicantFirstName,
-		CallerNumber:       attempt.Answer.CallerNumber,
-		DictatedNumber:     attempt.Answer.DictatedNumber,
-		Notes:              attempt.Answer.Notes.String(),
-		UpdatedAt:          now,
-	}); err != nil {
-		return err
-	}
-	if err := q.DeleteAttemptAnswerTags(ctx, attempt.ID); err != nil {
-		return err
-	}
-	if err := q.DeleteAttemptAnswerServices(ctx, attempt.ID); err != nil {
-		return err
-	}
-	for _, tagCode := range attempt.Answer.TagCodes {
-		if err := q.InsertAttemptAnswerTag(ctx, ticketssql.InsertAttemptAnswerTagParams{
-			AttemptID: attempt.ID, TagCode: tagCode,
+	for ticketID, answer := range attempt.Answers {
+		if err := q.UpsertAttemptAnswer(ctx, ticketssql.UpsertAttemptAnswerParams{
+			AttemptID:          attempt.ID,
+			TicketID:           ticketID,
+			IncidentTypeCode:   answer.IncidentTypeCode,
+			ApplicantLastName:  answer.ApplicantLastName,
+			ApplicantFirstName: answer.ApplicantFirstName,
+			CallerNumber:       answer.CallerNumber,
+			DictatedNumber:     answer.DictatedNumber,
+			Notes:              answer.Notes.String(),
+			UpdatedAt:          now,
 		}); err != nil {
 			return err
 		}
-	}
-	for _, serviceCode := range attempt.Answer.ServiceCodes {
-		if err := q.InsertAttemptAnswerService(ctx, ticketssql.InsertAttemptAnswerServiceParams{
-			AttemptID: attempt.ID, ServiceCode: serviceCode,
+		if err := q.DeleteAttemptAnswerTags(ctx, ticketssql.DeleteAttemptAnswerTagsParams{
+			AttemptID: attempt.ID, TicketID: ticketID,
 		}); err != nil {
 			return err
+		}
+		if err := q.DeleteAttemptAnswerServices(ctx, ticketssql.DeleteAttemptAnswerServicesParams{
+			AttemptID: attempt.ID, TicketID: ticketID,
+		}); err != nil {
+			return err
+		}
+		for _, tagCode := range answer.TagCodes {
+			if err := q.InsertAttemptAnswerTag(ctx, ticketssql.InsertAttemptAnswerTagParams{
+				AttemptID: attempt.ID, TicketID: ticketID, TagCode: tagCode,
+			}); err != nil {
+				return err
+			}
+		}
+		for _, serviceCode := range answer.ServiceCodes {
+			if err := q.InsertAttemptAnswerService(ctx, ticketssql.InsertAttemptAnswerServiceParams{
+				AttemptID: attempt.ID, TicketID: ticketID, ServiceCode: serviceCode,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit(ctx)
 }
 
-// MarkTimedOut closes an in_progress attempt without loading it first: the
-// single UPDATE is conditional on status still in_progress, so a concurrent
-// submit can never be clobbered by the deadline ticker (spec Q).
 func (r *AttemptRepository) MarkTimedOut(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE ticket_attempts SET status = 'timed_out', finished_at = now()
@@ -186,47 +177,68 @@ func (r *AttemptRepository) MarkTimedOut(ctx context.Context, id uuid.UUID) erro
 	return err
 }
 
-func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.TicketAttempt) (models.Attempt, error) {
-	ans, err := r.q.GetAttemptAnswer(ctx, row.ID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// fresh attempt: no answers yet — empty answer is fine, call path doesn't need one
-			ans = ticketssql.AttemptAnswer{}
-		} else {
-			return models.Attempt{}, err
+func (r *AttemptRepository) loadAttempts(ctx context.Context, rows []ticketssql.TicketAttempt) ([]models.Attempt, error) {
+	out := make([]models.Attempt, 0, len(rows))
+	for _, row := range rows {
+		a, err := r.loadAttempt(ctx, row)
+		if err != nil {
+			return nil, err
 		}
+		out = append(out, a)
 	}
-	tags, err := r.q.ListAttemptAnswerTags(ctx, row.ID)
-	if err != nil {
-		return models.Attempt{}, err
-	}
-	services, err := r.q.ListAttemptAnswerServices(ctx, row.ID)
-	if err != nil {
-		return models.Attempt{}, err
-	}
+	return out, nil
+}
+
+func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.TicketAttempt) (models.Attempt, error) {
 	status, err := value_objects.ParseAttemptStatus(row.Status)
 	if err != nil {
 		return models.Attempt{}, err
 	}
-	notes, err := value_objects.NewNotes(ans.Notes)
+	report := models.EmptyReport()
+	if len(row.Report) > 0 {
+		_ = json.Unmarshal(row.Report, &report)
+	}
+	answers := map[uuid.UUID]models.Answer{}
+	ansRows, err := r.q.ListAttemptAnswers(ctx, row.ID)
 	if err != nil {
 		return models.Attempt{}, err
 	}
+	for _, ans := range ansRows {
+		tags, err := r.q.ListAttemptAnswerTags(ctx, ticketssql.ListAttemptAnswerTagsParams{
+			AttemptID: row.ID, TicketID: ans.TicketID,
+		})
+		if err != nil {
+			return models.Attempt{}, err
+		}
+		services, err := r.q.ListAttemptAnswerServices(ctx, ticketssql.ListAttemptAnswerServicesParams{
+			AttemptID: row.ID, TicketID: ans.TicketID,
+		})
+		if err != nil {
+			return models.Attempt{}, err
+		}
+		notes, err := value_objects.NewNotes(ans.Notes)
+		if err != nil {
+			return models.Attempt{}, err
+		}
+		answers[ans.TicketID] = models.NewAnswer(
+			ans.IncidentTypeCode, tags, services,
+			ans.ApplicantLastName, ans.ApplicantFirstName,
+			ans.CallerNumber, ans.DictatedNumber, notes,
+		)
+	}
 	return models.Attempt{
 		ID:         row.ID,
-		TicketID:   row.TicketID,
+		VariantID:  row.VariantID,
 		UserID:     row.UserID,
+		GrantedBy:  row.GrantedBy,
 		AttemptNo:  int(row.AttemptNo),
 		Status:     status,
 		StartedAt:  row.StartedAt,
 		DeadlineAt: row.DeadlineAt,
 		FinishedAt: row.FinishedAt,
 		Score:      int16PtrToInt(row.Score),
-		Answer: models.NewAnswer(
-			ans.IncidentTypeCode, tags, services,
-			ans.ApplicantLastName, ans.ApplicantFirstName,
-			ans.CallerNumber, ans.DictatedNumber, notes,
-		),
+		Answers:    answers,
+		Report:     report,
 	}, nil
 }
 

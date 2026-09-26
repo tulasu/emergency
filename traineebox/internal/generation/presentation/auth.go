@@ -7,7 +7,6 @@ import (
 
 	"traineebox/internal/generation/application"
 	"traineebox/internal/generation/domain/errs"
-	"traineebox/internal/generation/domain/value_objects"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -18,10 +17,6 @@ func (a *API) requireSignedIn(ctx context.Context, header string) (application.S
 		return application.SessionUser{}, mapError(err)
 	}
 	return user, nil
-}
-
-func isAdmin(u application.SessionUser) bool {
-	return u.Role == value_objects.AccountRoleAdmin
 }
 
 func bearerToken(header string) string {

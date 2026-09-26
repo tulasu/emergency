@@ -6,6 +6,9 @@ import (
 
 	authapp "traineebox/internal/auth/application"
 	autherrs "traineebox/internal/auth/domain/errs"
+	currapp "traineebox/internal/curriculum/application"
+	currerrs "traineebox/internal/curriculum/domain/errs"
+	currvo "traineebox/internal/curriculum/domain/value_objects"
 	genapp "traineebox/internal/generation/application"
 	generrs "traineebox/internal/generation/domain/errs"
 	genvo "traineebox/internal/generation/domain/value_objects"
@@ -74,6 +77,37 @@ func mapTicketsAuthError(err error) error {
 		return ticketserrs.ErrNotFound
 	case errors.Is(err, autherrs.ErrForbidden):
 		return ticketserrs.ErrForbidden
+	default:
+		return err
+	}
+}
+
+type curriculumSessionAuthenticator struct {
+	auth authapp.Authenticate
+}
+
+func (a curriculumSessionAuthenticator) CurrentUser(ctx context.Context, token string) (currapp.SessionUser, error) {
+	user, err := a.auth.Execute(ctx, token)
+	if err != nil {
+		return currapp.SessionUser{}, mapCurriculumAuthError(err)
+	}
+	role, err := currvo.ParseAccountRole(string(user.Role))
+	if err != nil {
+		return currapp.SessionUser{}, err
+	}
+	return currapp.SessionUser{ID: user.ID, Role: role}, nil
+}
+
+func mapCurriculumAuthError(err error) error {
+	switch {
+	case errors.Is(err, autherrs.ErrUnauthorized):
+		return currerrs.ErrUnauthorized
+	case errors.Is(err, autherrs.ErrUserBlocked):
+		return currerrs.ErrUserBlocked
+	case errors.Is(err, autherrs.ErrNotFound):
+		return currerrs.ErrNotFound
+	case errors.Is(err, autherrs.ErrForbidden):
+		return currerrs.ErrForbidden
 	default:
 		return err
 	}

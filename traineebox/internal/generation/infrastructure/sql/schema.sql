@@ -1,9 +1,12 @@
--- sqlc schema mirror (post-00006)
-CREATE TABLE groups (
+CREATE TABLE users (
     id UUID PRIMARY KEY
 );
 
-CREATE TABLE users (
+CREATE TABLE topics (
+    id UUID PRIMARY KEY
+);
+
+CREATE TABLE variants (
     id UUID PRIMARY KEY
 );
 
@@ -13,7 +16,8 @@ CREATE TABLE tickets (
 
 CREATE TABLE ticket_generation_jobs (
     id UUID PRIMARY KEY,
-    group_id UUID NOT NULL REFERENCES groups(id),
+    variant_id UUID NOT NULL REFERENCES variants(id),
+    topic_id UUID NOT NULL REFERENCES topics(id),
     created_by UUID NOT NULL REFERENCES users(id),
     prompt TEXT NOT NULL,
     status TEXT NOT NULL,

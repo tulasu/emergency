@@ -20,7 +20,8 @@ type draftReferenceDTO struct {
 
 type jobDTO struct {
 	ID                uuid.UUID         `json:"id"`
-	GroupID           uuid.UUID         `json:"group_id"`
+	VariantID         uuid.UUID         `json:"variant_id"`
+	TopicID           uuid.UUID         `json:"topic_id"`
 	CreatedBy         uuid.UUID         `json:"created_by"`
 	Prompt            string            `json:"prompt"`
 	Status            string            `json:"status"`
@@ -39,7 +40,8 @@ func toJobDTO(j models.Job) jobDTO {
 	ref := j.DraftReference.Normalize()
 	return jobDTO{
 		ID:        j.ID,
-		GroupID:   j.GroupID,
+		VariantID: j.VariantID,
+		TopicID:   j.TopicID,
 		CreatedBy: j.CreatedBy,
 		Prompt:    j.Prompt,
 		Status:    j.Status.String(),

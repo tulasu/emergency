@@ -11,31 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestTicketAvailabilityAndAttempts(t *testing.T) {
-	title, _ := value_objects.NewTicketTitle("T1")
-	max := 2
-	from := time.Now().UTC().Add(-time.Hour)
-	until := time.Now().UTC().Add(time.Hour)
-	ticket, err := models.NewTicket(uuid.New(), title, "body", uuid.New(), &max, &from, &until, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	if err := ticket.CanStartAttempt(now, 0, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := ticket.CanStartAttempt(now, 0, true); err != errs.ErrAttemptInProgress {
-		t.Fatalf("got %v", err)
-	}
-	if err := ticket.CanStartAttempt(now, 2, false); err != errs.ErrAttemptsExhausted {
-		t.Fatalf("got %v", err)
-	}
-	past := until.Add(time.Minute)
-	if err := ticket.CanStartAttempt(past, 0, false); err != errs.ErrUnavailable {
-		t.Fatalf("got %v", err)
-	}
-}
-
 func TestAnswerTagsRequireType(t *testing.T) {
 	typeCode := "fire"
 	groups := []models.IncidentTagGroup{{
@@ -60,20 +35,23 @@ func TestAnswerTagsRequireType(t *testing.T) {
 }
 
 func TestAttemptExpireScoresDraft(t *testing.T) {
-	typeCode := "fire"
-	ref := models.ReferenceAnswer{
-		TicketID:         uuid.New(),
-		IncidentTypeCode: typeCode,
-	}
 	deadline := time.Now().UTC().Add(-time.Second)
-	attempt := models.NewAttempt(ref.TicketID, uuid.New(), 1, time.Now().UTC().Add(-time.Minute), &deadline)
-	attempt.Answer = models.NewAnswer(&typeCode, nil, nil, "", "", "", "", "")
+	started := time.Now().UTC().Add(-time.Minute)
+	attempt := models.NewAvailableAttempt(uuid.New(), uuid.New(), uuid.New(), 1)
+	attempt.Status = value_objects.AttemptStatusInProgress
+	attempt.StartedAt = &started
+	attempt.DeadlineAt = &deadline
+	ticketID := uuid.New()
+	typeCode := "fire"
+	attempt.Answers = map[uuid.UUID]models.Answer{
+		ticketID: models.NewAnswer(&typeCode, nil, nil, "", "", "", "", ""),
+	}
 	now := time.Now().UTC()
 	if !attempt.IsExpired(now) {
 		t.Fatal("expected expired")
 	}
-	scorer := func(models.ReferenceAnswer, models.Answer) (int, error) { return 42, nil }
-	if err := attempt.Expire(now, ref, scorer); err != nil {
+	report := models.Report{OverallScore: 42}
+	if err := attempt.Expire(now, report, 42); err != nil {
 		t.Fatal(err)
 	}
 	if attempt.Status != value_objects.AttemptStatusTimedOut {
@@ -90,6 +68,17 @@ func TestNotesLimit(t *testing.T) {
 		long[i] = 'a'
 	}
 	if _, err := value_objects.NewNotes(string(long)); err != errs.ErrInvalidInput {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestAttemptStartOnce(t *testing.T) {
+	attempt := models.NewAvailableAttempt(uuid.New(), uuid.New(), uuid.New(), 1)
+	now := time.Now().UTC()
+	if err := attempt.Start(now, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := attempt.Start(now, nil); err != errs.ErrAttemptInProgress {
 		t.Fatalf("got %v", err)
 	}
 }

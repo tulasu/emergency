@@ -14,19 +14,20 @@ import (
 
 const createGenerationJob = `-- name: CreateGenerationJob :exec
 INSERT INTO ticket_generation_jobs (
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
-    $7, $8, $9, $10, $11,
-    $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11, $12,
+    $13, $14, $15, $16, $17, $18
 )
 `
 
 type CreateGenerationJobParams struct {
 	ID                uuid.UUID
-	GroupID           uuid.UUID
+	VariantID         uuid.UUID
+	TopicID           uuid.UUID
 	CreatedBy         uuid.UUID
 	Prompt            string
 	Status            string
@@ -47,7 +48,8 @@ type CreateGenerationJobParams struct {
 func (q *Queries) CreateGenerationJob(ctx context.Context, arg CreateGenerationJobParams) error {
 	_, err := q.db.Exec(ctx, createGenerationJob,
 		arg.ID,
-		arg.GroupID,
+		arg.VariantID,
+		arg.TopicID,
 		arg.CreatedBy,
 		arg.Prompt,
 		arg.Status,
@@ -78,7 +80,7 @@ func (q *Queries) DeleteGenerationJob(ctx context.Context, id uuid.UUID) error {
 
 const getGenerationJobByID = `-- name: GetGenerationJobByID :one
 SELECT
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 FROM ticket_generation_jobs
@@ -90,7 +92,8 @@ func (q *Queries) GetGenerationJobByID(ctx context.Context, id uuid.UUID) (Ticke
 	var i TicketGenerationJob
 	err := row.Scan(
 		&i.ID,
-		&i.GroupID,
+		&i.VariantID,
+		&i.TopicID,
 		&i.CreatedBy,
 		&i.Prompt,
 		&i.Status,
@@ -110,18 +113,18 @@ func (q *Queries) GetGenerationJobByID(ctx context.Context, id uuid.UUID) (Ticke
 	return i, err
 }
 
-const listGenerationJobsByGroup = `-- name: ListGenerationJobsByGroup :many
+const listGenerationJobsByVariant = `-- name: ListGenerationJobsByVariant :many
 SELECT
-    id, group_id, created_by, prompt, status, version,
+    id, variant_id, topic_id, created_by, prompt, status, version,
     scenario_text, draft_title, draft_reference, error_message, attempts,
     published_ticket_id, claimed_by, claimed_at, lease_until, created_at, updated_at
 FROM ticket_generation_jobs
-WHERE group_id = $1
+WHERE variant_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListGenerationJobsByGroup(ctx context.Context, groupID uuid.UUID) ([]TicketGenerationJob, error) {
-	rows, err := q.db.Query(ctx, listGenerationJobsByGroup, groupID)
+func (q *Queries) ListGenerationJobsByVariant(ctx context.Context, variantID uuid.UUID) ([]TicketGenerationJob, error) {
+	rows, err := q.db.Query(ctx, listGenerationJobsByVariant, variantID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +134,8 @@ func (q *Queries) ListGenerationJobsByGroup(ctx context.Context, groupID uuid.UU
 		var i TicketGenerationJob
 		if err := rows.Scan(
 			&i.ID,
-			&i.GroupID,
+			&i.VariantID,
+			&i.TopicID,
 			&i.CreatedBy,
 			&i.Prompt,
 			&i.Status,

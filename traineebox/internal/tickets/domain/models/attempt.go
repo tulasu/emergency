@@ -13,27 +13,29 @@ type Scorer func(ref ReferenceAnswer, answer Answer) (int, error)
 
 type Attempt struct {
 	ID         uuid.UUID
-	TicketID   uuid.UUID
+	VariantID  uuid.UUID
 	UserID     uuid.UUID
+	GrantedBy  uuid.UUID
 	AttemptNo  int
 	Status     value_objects.AttemptStatus
-	StartedAt  time.Time
+	StartedAt  *time.Time
 	DeadlineAt *time.Time
 	FinishedAt *time.Time
 	Score      *int
-	Answer     Answer
+	Answers    map[uuid.UUID]Answer
+	Report     Report
 }
 
-func NewAttempt(ticketID, userID uuid.UUID, attemptNo int, startedAt time.Time, deadline *time.Time) Attempt {
+func NewAvailableAttempt(variantID, userID, grantedBy uuid.UUID, attemptNo int) Attempt {
 	return Attempt{
-		ID:         uuid.New(),
-		TicketID:   ticketID,
-		UserID:     userID,
-		AttemptNo:  attemptNo,
-		Status:     value_objects.AttemptStatusInProgress,
-		StartedAt:  startedAt,
-		DeadlineAt: deadline,
-		Answer:     EmptyAnswer(),
+		ID:        uuid.New(),
+		VariantID: variantID,
+		UserID:    userID,
+		GrantedBy: grantedBy,
+		AttemptNo: attemptNo,
+		Status:    value_objects.AttemptStatusAvailable,
+		Answers:   map[uuid.UUID]Answer{},
+		Report:    EmptyReport(),
 	}
 }
 
@@ -43,56 +45,73 @@ func (a Attempt) IsExpired(now time.Time) bool {
 		!now.Before(*a.DeadlineAt)
 }
 
-func (a *Attempt) SaveDraft(answer Answer, now time.Time) error {
-	if a.Status != value_objects.AttemptStatusInProgress {
+func (a *Attempt) Start(now time.Time, deadline *time.Time) error {
+	if a.Status != value_objects.AttemptStatusAvailable {
+		if a.Status == value_objects.AttemptStatusInProgress {
+			return errs.ErrAttemptInProgress
+		}
 		return errs.ErrAttemptNotActive
 	}
-	if a.IsExpired(now) {
-		return errs.ErrAttemptNotActive
-	}
-	a.Answer = answer
+	a.Status = value_objects.AttemptStatusInProgress
+	a.StartedAt = &now
+	a.DeadlineAt = deadline
 	return nil
 }
 
-func (a *Attempt) Submit(now time.Time, ref ReferenceAnswer, score Scorer) error {
+func (a *Attempt) SaveDraft(ticketID uuid.UUID, answer Answer, now time.Time) error {
 	if a.Status != value_objects.AttemptStatusInProgress {
 		return errs.ErrAttemptNotActive
 	}
 	if a.IsExpired(now) {
 		return errs.ErrAttemptNotActive
 	}
-	s, err := score(ref, a.Answer)
-	if err != nil {
-		return err
+	if a.Answers == nil {
+		a.Answers = map[uuid.UUID]Answer{}
 	}
-	if s < 1 {
-		s = 1
+	a.Answers[ticketID] = answer
+	return nil
+}
+
+func (a *Attempt) Submit(now time.Time, report Report, score int) error {
+	if a.Status != value_objects.AttemptStatusInProgress {
+		return errs.ErrAttemptNotActive
 	}
-	if s > 100 {
-		s = 100
+	if a.IsExpired(now) {
+		return errs.ErrAttemptNotActive
+	}
+	if score < 1 {
+		score = 1
+	}
+	if score > 100 {
+		score = 100
 	}
 	a.Status = value_objects.AttemptStatusSubmitted
 	a.FinishedAt = &now
-	a.Score = &s
+	a.Score = &score
+	a.Report = report
 	return nil
 }
 
-func (a *Attempt) Expire(now time.Time, ref ReferenceAnswer, score Scorer) error {
+func (a *Attempt) Expire(now time.Time, report Report, score int) error {
 	if a.Status != value_objects.AttemptStatusInProgress {
 		return nil
 	}
-	s, err := score(ref, a.Answer)
-	if err != nil {
-		return err
+	if score < 1 {
+		score = 1
 	}
-	if s < 1 {
-		s = 1
-	}
-	if s > 100 {
-		s = 100
+	if score > 100 {
+		score = 100
 	}
 	a.Status = value_objects.AttemptStatusTimedOut
 	a.FinishedAt = &now
-	a.Score = &s
+	a.Score = &score
+	a.Report = report
 	return nil
+}
+
+func (a Attempt) AnswerFor(ticketID uuid.UUID) Answer {
+	if ans, ok := a.Answers[ticketID]; ok {
+		return ans
+	}
+	return EmptyAnswer()
 }

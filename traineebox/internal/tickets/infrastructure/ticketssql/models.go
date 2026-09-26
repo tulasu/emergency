@@ -12,6 +12,7 @@ import (
 
 type AttemptAnswer struct {
 	AttemptID          uuid.UUID
+	TicketID           uuid.UUID
 	IncidentTypeCode   *string
 	ApplicantLastName  string
 	ApplicantFirstName string
@@ -23,11 +24,13 @@ type AttemptAnswer struct {
 
 type AttemptAnswerService struct {
 	AttemptID   uuid.UUID
+	TicketID    uuid.UUID
 	ServiceCode string
 }
 
 type AttemptAnswerTag struct {
 	AttemptID uuid.UUID
+	TicketID  uuid.UUID
 	TagCode   string
 }
 
@@ -49,27 +52,31 @@ type ReferenceAnswerTag struct {
 
 type Ticket struct {
 	ID              uuid.UUID
-	GroupID         uuid.UUID
+	VariantID       uuid.UUID
+	TopicID         uuid.UUID
 	Title           string
 	Body            string
-	MaxAttempts     *int32
-	AvailableFrom   *time.Time
-	AvailableUntil  *time.Time
-	DurationSeconds *int32
 	CreatedBy       uuid.UUID
 	CreatedAt       time.Time
+	Scenario        []byte
+	ScenarioVersion string
+	Reference       []byte
+	Mode            string
+	Briefing        string
 }
 
 type TicketAttempt struct {
 	ID         uuid.UUID
-	TicketID   uuid.UUID
+	VariantID  uuid.UUID
 	UserID     uuid.UUID
+	GrantedBy  uuid.UUID
 	AttemptNo  int32
 	Status     string
-	StartedAt  time.Time
+	StartedAt  *time.Time
 	DeadlineAt *time.Time
 	FinishedAt *time.Time
 	Score      *int16
+	Report     []byte
 }
 
 type TicketReferenceAnswer struct {
@@ -79,4 +86,12 @@ type TicketReferenceAnswer struct {
 	ApplicantFirstName string
 	CallerNumber       string
 	DictatedNumber     string
+}
+
+type Topic struct {
+	ID uuid.UUID
+}
+
+type Variant struct {
+	ID uuid.UUID
 }

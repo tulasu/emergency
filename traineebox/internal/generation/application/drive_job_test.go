@@ -34,7 +34,7 @@ func (f *fakeJobs) FindByID(_ context.Context, id uuid.UUID) (models.Job, error)
 	return job, nil
 }
 
-func (f *fakeJobs) ListByGroup(context.Context, uuid.UUID) ([]models.Job, error) {
+func (f *fakeJobs) ListByVariant(context.Context, uuid.UUID) ([]models.Job, error) {
 	return nil, nil
 }
 
@@ -117,7 +117,7 @@ func (f *fakeLinter) Lint(context.Context, string) ([]string, bool, error) {
 }
 
 func queuedJob() models.Job {
-	job, err := models.NewJob(uuid.New(), uuid.New(), "пожар")
+	job, err := models.NewJob(uuid.New(), uuid.New(), uuid.New(), "пожар")
 	if err != nil {
 		panic(err)
 	}

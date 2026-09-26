@@ -96,46 +96,47 @@ func seedDemo(ctx context.Context, cfg config.Config, opts demoOptions) error {
 		userID, opts.endpoint, opts.endpointPassword); err != nil {
 		return err
 	}
-	// 6. Find-or-create demo ticket (scenario->>'id' is the marker).
-	var ticketID uuid.UUID
+	var ticketID, variantID uuid.UUID
 	err = tx.QueryRow(ctx,
-		`SELECT id FROM tickets WHERE scenario->>'id' = $1 LIMIT 1`, opts.scenarioID).Scan(&ticketID)
+		`SELECT id, variant_id FROM tickets WHERE scenario->>'id' = $1 LIMIT 1`, opts.scenarioID).Scan(&ticketID, &variantID)
 	switch {
 	case err == nil:
-		// reuse existing demo ticket
 	case err == pgx.ErrNoRows:
-		groupID, err := ensureDemoGroup(ctx, tx, userID)
+		topicID, moduleID, lessonID, err := ensureDemoCurriculum(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO tickets (group_id, title, body, created_by, scenario, scenario_version, mode)
-			 VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'voice') RETURNING id`,
-			groupID, "Demo call", "", userID, string(snapshot), opts.scenarioID).Scan(&ticketID); err != nil {
+			`INSERT INTO variants (lesson_id, title, position) VALUES ($1, 'Demo variant', 0) RETURNING id`,
+			lessonID).Scan(&variantID); err != nil {
+			return err
+		}
+		_ = moduleID
+		if err := tx.QueryRow(ctx,
+			`INSERT INTO tickets (variant_id, topic_id, title, body, created_by, scenario, scenario_version, mode)
+			 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 'voice') RETURNING id`,
+			variantID, topicID, "Demo call", "", userID, string(snapshot), opts.scenarioID).Scan(&ticketID); err != nil {
 			return err
 		}
 	default:
 		return err
 	}
-	// 7. Find-or-create in_progress attempt (live bank digest is read at call
-	// time, not stored on the attempt — ticket_attempts has no bank_digest col).
 	var attemptID uuid.UUID
 	err = tx.QueryRow(ctx,
 		`SELECT id FROM ticket_attempts
-		 WHERE ticket_id = $1 AND user_id = $2 AND status = 'in_progress'
+		 WHERE variant_id = $1 AND user_id = $2 AND status = 'in_progress'
 		   AND (deadline_at IS NULL OR deadline_at > now())
 		 LIMIT 1`,
-		ticketID, userID).Scan(&attemptID)
+		variantID, userID).Scan(&attemptID)
 	switch {
 	case err == nil:
-		// reuse existing in-progress attempt
 	case err == pgx.ErrNoRows:
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO ticket_attempts (ticket_id, user_id, attempt_no, status, started_at, deadline_at)
-			 VALUES ($1, $2, COALESCE((SELECT MAX(attempt_no) FROM ticket_attempts WHERE ticket_id = $1 AND user_id = $2), 0) + 1,
+			`INSERT INTO ticket_attempts (variant_id, user_id, granted_by, attempt_no, status, started_at, deadline_at)
+			 VALUES ($1, $2, $2, COALESCE((SELECT MAX(attempt_no) FROM ticket_attempts WHERE variant_id = $1 AND user_id = $2), 0) + 1,
 			         'in_progress', now(), now() + $3 * interval '1 hour')
 			 RETURNING id`,
-			ticketID, userID, opts.deadlineHours).Scan(&attemptID); err != nil {
+			variantID, userID, opts.deadlineHours).Scan(&attemptID); err != nil {
 			return err
 		}
 	default:
@@ -173,19 +174,31 @@ func seedDemo(ctx context.Context, cfg config.Config, opts demoOptions) error {
 // constraint, so find-then-insert; sequential re-runs are idempotent).
 // ponytail: no owner_id column — group ownership lives in group_members, which
 // the call path doesn't need, so we only create the bare group.
-func ensureDemoGroup(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM groups WHERE name = 'demo-group' LIMIT 1`).Scan(&id)
-	if err == nil {
-		return id, nil
+func ensureDemoCurriculum(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (topicID, moduleID, lessonID uuid.UUID, err error) {
+	err = tx.QueryRow(ctx, `SELECT id FROM topics WHERE title = 'Demo topic' LIMIT 1`).Scan(&topicID)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, `INSERT INTO topics (title, created_by) VALUES ('Demo topic', $1) RETURNING id`, userID).Scan(&topicID)
 	}
-	if err != pgx.ErrNoRows {
-		return uuid.Nil, err
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO groups (name) VALUES ('demo-group') RETURNING id`).Scan(&id); err != nil {
-		return uuid.Nil, err
+	err = tx.QueryRow(ctx, `SELECT id FROM modules WHERE title = 'Demo module' LIMIT 1`).Scan(&moduleID)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, `INSERT INTO modules (title, description, created_by) VALUES ('Demo module', '', $1) RETURNING id`, userID).Scan(&moduleID)
 	}
-	return id, nil
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	err = tx.QueryRow(ctx, `SELECT id FROM lessons WHERE module_id = $1 AND title = 'Demo lesson' LIMIT 1`, moduleID).Scan(&lessonID)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx,
+			`INSERT INTO lessons (module_id, title, position, duration_seconds) VALUES ($1, 'Demo lesson', 0, NULL) RETURNING id`,
+			moduleID).Scan(&lessonID)
+	}
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	return topicID, moduleID, lessonID, nil
 }
 
 // bankReload POSTs /bank/reload with the internal service token (2 attempts).

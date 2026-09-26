@@ -7,7 +7,6 @@ import (
 
 	"traineebox/internal/tickets/application"
 	"traineebox/internal/tickets/domain/errs"
-	"traineebox/internal/tickets/domain/value_objects"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -18,10 +17,6 @@ func (a *API) requireSignedIn(ctx context.Context, header string) (application.S
 		return application.SessionUser{}, mapError(err)
 	}
 	return user, nil
-}
-
-func isAdmin(u application.SessionUser) bool {
-	return u.Role == value_objects.AccountRoleAdmin
 }
 
 func bearerToken(header string) string {
@@ -36,7 +31,7 @@ func mapError(err error) error {
 	switch {
 	case errors.Is(err, errs.ErrNotFound):
 		return huma.Error404NotFound("not found")
-	case errors.Is(err, errs.ErrConflict), errors.Is(err, errs.ErrAttemptInProgress):
+	case errors.Is(err, errs.ErrConflict), errors.Is(err, errs.ErrAttemptInProgress), errors.Is(err, errs.ErrAttemptNotAvailable):
 		return huma.Error409Conflict("conflict")
 	case errors.Is(err, errs.ErrInvalidInput), errors.Is(err, errs.ErrInvalidTags), errors.Is(err, errs.ErrInvalidTagSelection):
 		return huma.Error400BadRequest("invalid input")

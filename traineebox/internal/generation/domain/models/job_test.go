@@ -11,7 +11,7 @@ import (
 )
 
 func TestJobStateTransitions(t *testing.T) {
-	job, err := models.NewJob(uuid.New(), uuid.New(), "пожар")
+	job, err := models.NewJob(uuid.New(), uuid.New(), uuid.New(), "пожар")
 	if err != nil {
 		t.Fatal(err)
 	}

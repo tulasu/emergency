@@ -5,60 +5,44 @@ import (
 	"traineebox/internal/tickets/domain/value_objects"
 )
 
-func ManageTicket(actor value_objects.MemberRole, admin bool) error {
-	if admin {
-		return nil
-	}
-	switch actor {
-	case value_objects.MemberRoleOwner, value_objects.MemberRoleTeacher:
-		return nil
-	default:
-		return errs.ErrForbidden
-	}
-}
-
-func ViewTicket(actor value_objects.MemberRole, admin bool) error {
-	if admin {
-		return nil
-	}
-	switch actor {
-	case value_objects.MemberRoleOwner, value_objects.MemberRoleTeacher, value_objects.MemberRoleStudent:
-		return nil
-	default:
-		return errs.ErrForbidden
-	}
-}
-
-func StartAttempt(actor value_objects.MemberRole, admin bool) error {
-	if admin {
-		return errs.ErrForbidden
-	}
-	if actor == value_objects.MemberRoleStudent {
+func ManageTicket(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher {
 		return nil
 	}
 	return errs.ErrForbidden
 }
 
-func ViewOwnAttempt(actor value_objects.MemberRole, admin bool) error {
-	if admin {
+func ViewTicket(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher || role == value_objects.AccountRoleStudent {
 		return nil
 	}
-	switch actor {
-	case value_objects.MemberRoleOwner, value_objects.MemberRoleTeacher, value_objects.MemberRoleStudent:
-		return nil
-	default:
-		return errs.ErrForbidden
-	}
+	return errs.ErrForbidden
 }
 
-func ListGroupAttempts(actor value_objects.MemberRole, admin bool) error {
-	if admin {
+func StartAttempt(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleStudent {
 		return nil
 	}
-	switch actor {
-	case value_objects.MemberRoleOwner, value_objects.MemberRoleTeacher:
+	return errs.ErrForbidden
+}
+
+func GrantAttempt(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher {
 		return nil
-	default:
-		return errs.ErrForbidden
 	}
+	return errs.ErrForbidden
+}
+
+func ViewOwnAttempt(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher || role == value_objects.AccountRoleStudent {
+		return nil
+	}
+	return errs.ErrForbidden
+}
+
+func ViewAnyAttempt(role value_objects.AccountRole) error {
+	if role == value_objects.AccountRoleAdmin || role == value_objects.AccountRoleTeacher {
+		return nil
+	}
+	return errs.ErrForbidden
 }

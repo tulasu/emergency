@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"traineebox/internal/generation/domain/models"
-	"traineebox/internal/generation/domain/value_objects"
 
 	"github.com/google/uuid"
 )
@@ -13,15 +12,10 @@ import (
 type JobRepository interface {
 	Create(ctx context.Context, job models.Job) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.Job, error)
-	ListByGroup(ctx context.Context, groupID uuid.UUID) ([]models.Job, error)
-	// SaveCAS updates job only if status and version match expected; bumps version.
+	ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Job, error)
 	SaveCAS(ctx context.Context, job models.Job, expectedStatus string, expectedVersion int) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ClaimNext(ctx context.Context, workerID string, leaseSeconds int) (models.Job, bool, error)
-}
-
-type GroupMembership interface {
-	RoleOf(ctx context.Context, groupID, userID uuid.UUID) (value_objects.MemberRole, error)
 }
 
 type Catalog interface {
@@ -30,9 +24,15 @@ type Catalog interface {
 	ServicesExist(ctx context.Context, codes []string) (bool, error)
 }
 
+type CurriculumExists interface {
+	VariantExists(ctx context.Context, variantID uuid.UUID) error
+	TopicExists(ctx context.Context, topicID uuid.UUID) error
+}
+
 type PublishDraft struct {
 	TicketID        uuid.UUID
-	GroupID         uuid.UUID
+	VariantID       uuid.UUID
+	TopicID         uuid.UUID
 	Title           string
 	Body            string
 	CreatedBy       uuid.UUID

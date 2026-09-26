@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
 
 	"github.com/google/uuid"
@@ -20,8 +19,8 @@ func TestGenerationJobApproveFlow(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "genowner", "password1", value_objects.RoleTeacher)
-	_ = testkit.SeedUser(t, pool, "genstud", "password1", value_objects.RoleStudent)
+	_ = testkit.SeedUser(t, pool, "genowner", "password1", "teacher")
+	_ = testkit.SeedUser(t, pool, "genstud", "password1", "student")
 	ownerToken := genLogin(t, handler, "genowner", "password1")
 	studentToken := genLogin(t, handler, "genstud", "password1")
 
@@ -124,7 +123,7 @@ func TestGenerationJobRetryCancel(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "genowner2", "password1", value_objects.RoleTeacher)
+	_ = testkit.SeedUser(t, pool, "genowner2", "password1", "teacher")
 	ownerToken := genLogin(t, handler, "genowner2", "password1")
 
 	createGroup := genDo(t, handler, http.MethodPost, "/groups", ownerToken, map[string]string{"name": "Gen2"})

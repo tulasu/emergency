@@ -13,6 +13,15 @@ FROM attempt_calls WHERE attempt_id = $1 ORDER BY created_at;
 -- name: SetCallStatus :exec
 UPDATE attempt_calls SET status = $2, updated_at = now() WHERE id = $1;
 
+-- name: SetCallChannelID :exec
+UPDATE attempt_calls SET channel_id = $2, updated_at = now() WHERE id = $1;
+
+-- name: ActiveCallForAttempt :one
+SELECT id, attempt_id, ticket_id, user_id, scenario_id, bank_digest, channel_id, status, created_at, updated_at
+FROM attempt_calls WHERE attempt_id = $1
+ AND status IN ('originating','ringing','answered','completed')
+ ORDER BY created_at DESC LIMIT 1;
+
 -- name: UpsertCallTurn :exec
 INSERT INTO call_turns (call_id, n, utterance, reply, style)
 VALUES ($1, $2, $3, $4, $5)

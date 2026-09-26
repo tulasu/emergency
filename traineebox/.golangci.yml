@@ -123,7 +123,8 @@ linters:
             - github.com/jackc/pgx
             - github.com/jackc/pgx/v5
             - github.com/jackc/puddle
-            - gopkg.in/yaml.v3        tickets_presentation:
+            - gopkg.in/yaml.v3
+        tickets_presentation:
           files:
             - "**/internal/tickets/presentation/**/*.go"
           allow:
@@ -131,6 +132,132 @@ linters:
             - traineebox/internal/tickets/application
             - traineebox/internal/tickets/domain
             - traineebox/internal/tickets/presentation
+            - traineebox/internal/testkit
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid
+        generation_domain:
+          files:
+            - "**/internal/generation/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/generation/domain
+            - github.com/google/uuid
+        generation_application:
+          files:
+            - "**/internal/generation/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/generation/domain
+            - traineebox/internal/generation/application
+            - github.com/google/uuid
+        generation_infrastructure:
+          files:
+            - "**/internal/generation/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/generation/domain
+            - traineebox/internal/generation/infrastructure
+            - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        generation_presentation:
+          files:
+            - "**/internal/generation/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/generation/application
+            - traineebox/internal/generation/domain
+            - traineebox/internal/generation/presentation
+            - traineebox/internal/testkit
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid
+        generation_worker:
+          files:
+            - "**/internal/generation/worker/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/generation/application
+            - traineebox/internal/generation/domain
+            - traineebox/internal/generation/worker
+            - github.com/google/uuid
+        calls_domain:
+          files:
+            - "**/internal/calls/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/calls/domain
+            - github.com/google/uuid
+        calls_application:
+          files:
+            - "**/internal/calls/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/calls/domain
+            - traineebox/internal/calls/application
+            - github.com/google/uuid
+        calls_infrastructure:
+          files:
+            - "**/internal/calls/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/calls/domain
+            - traineebox/internal/calls/infrastructure
+            - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        calls_presentation:
+          files:
+            - "**/internal/calls/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/calls/application
+            - traineebox/internal/calls/domain
+            - traineebox/internal/calls/presentation
+            - traineebox/internal/testkit
+            - github.com/danielgtaylor/huma
+            - github.com/google/uuid
+        dialog_domain:
+          files:
+            - "**/internal/dialog/domain/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/dialog/domain
+            - github.com/google/uuid
+        dialog_application:
+          files:
+            - "**/internal/dialog/application/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/dialog/domain
+            - traineebox/internal/dialog/application
+            - github.com/google/uuid
+        dialog_infrastructure:
+          files:
+            - "**/internal/dialog/infrastructure/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/dialog/domain
+            - traineebox/internal/dialog/infrastructure
+            - traineebox/internal/platform/postgres
+            - traineebox/internal/testkit
+            - github.com/google/uuid
+            - github.com/jackc/pgx
+            - github.com/jackc/pgx/v5
+            - github.com/jackc/puddle
+        dialog_presentation:
+          files:
+            - "**/internal/dialog/presentation/**/*.go"
+          allow:
+            - $gostd
+            - traineebox/internal/dialog/application
+            - traineebox/internal/dialog/domain
+            - traineebox/internal/dialog/presentation
             - traineebox/internal/testkit
             - github.com/danielgtaylor/huma
             - github.com/google/uuid

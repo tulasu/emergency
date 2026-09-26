@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/groups/domain/errs"
 	"traineebox/internal/groups/domain/models"
 	groupsvo "traineebox/internal/groups/domain/value_objects"
@@ -17,8 +16,8 @@ func TestGroupRepositoryAndDirectory(t *testing.T) {
 	pool := testkit.StartPostgres(t)
 	testkit.Truncate(t, pool)
 
-	owner := testkit.SeedUser(t, pool, "gowner", "password1", value_objects.RoleTeacher)
-	student := testkit.SeedUser(t, pool, "gstud", "password1", value_objects.RoleStudent)
+	owner := testkit.SeedUser(t, pool, "gowner", "password1", "teacher")
+	student := testkit.SeedUser(t, pool, "gstud", "password1", "student")
 
 	dir := infrastructure.NewUserDirectory(pool)
 	role, blocked, err := dir.AccountOf(context.Background(), owner.ID)

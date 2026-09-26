@@ -6,27 +6,21 @@ import (
 	"testing"
 	"time"
 
-	authvo "traineebox/internal/auth/domain/value_objects"
 	genmodels "traineebox/internal/generation/domain/models"
+	"traineebox/internal/generation/domain/repositories"
 	genvo "traineebox/internal/generation/domain/value_objects"
 	geninfra "traineebox/internal/generation/infrastructure"
 	"traineebox/internal/testkit"
-	ticketsmodels "traineebox/internal/tickets/domain/models"
-	ticketsvo "traineebox/internal/tickets/domain/value_objects"
-	ticketsinfra "traineebox/internal/tickets/infrastructure"
 
 	"github.com/google/uuid"
 )
 
-// ApproveAtomically publishes ticket + reference + scenario/mode/briefing and
-// the job row in ONE transaction: no ticket without its reference, no
-// published ticket with a job stuck in ready.
 func TestApproveAtomically(t *testing.T) {
 	pool := testkit.StartPostgres(t)
 	testkit.Truncate(t, pool)
 	ctx := context.Background()
 
-	teacher := testkit.SeedUser(t, pool, "atomowner", "password1", authvo.RoleTeacher)
+	teacher := testkit.SeedUser(t, pool, "atomowner", "password1", "teacher")
 	groupID := uuid.New()
 	if _, err := pool.Exec(ctx, `INSERT INTO groups (id, name) VALUES ($1, 'Atom')`, groupID); err != nil {
 		t.Fatal(err)
@@ -53,48 +47,63 @@ func TestApproveAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	title, err := ticketsvo.NewTicketTitle("Пожар на складе")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ticket := ticketsmodels.Ticket{
-		ID: ticketID(), GroupID: groupID, Title: title, Body: "b",
-		CreatedBy: teacher.ID, CreatedAt: time.Now().UTC(),
+	ticketID := uuid.New()
+	draft := repositories.PublishDraft{
+		TicketID:        ticketID,
+		GroupID:         groupID,
+		Title:           "Пожар на складе",
+		Body:            "b",
+		CreatedBy:       teacher.ID,
+		CreatedAt:       time.Now().UTC(),
 		ScenarioJSON:    `{"id":"s1","opening":"Алло","facts":[]}`,
-		ScenarioVersion: "v3", Mode: "text", Briefing: "briefing line",
+		ScenarioVersion: "v3",
+		Mode:            "text",
+		Briefing:        "briefing line",
+		Reference: genmodels.DraftReference{
+			IncidentTypeCode:   "101",
+			TagCodes:           []string{"where_street"},
+			ServiceCodes:       []string{"sluzhba_101"},
+			ApplicantLastName:  "Петров",
+			ApplicantFirstName: "Петр",
+			CallerNumber:       "79001112233",
+			DictatedNumber:     "79001112233",
+		},
+		JobID:           job.ID,
+		ExpectedStatus:  ready.Status.String(),
+		ExpectedVersion: ready.Version,
 	}
-	ref, err := ticketsmodels.NewReferenceAnswer(ticket.ID, "101",
-		[]string{"where_street"}, []string{"sluzhba_101"},
-		"Петров", "Петр", "79001112233", "79001112233")
-	if err != nil {
+
+	if err := geninfra.ApproveAtomically(ctx, pool, draft); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := geninfra.ApproveAtomically(ctx, pool, ticket, ref,
-		job.ID, ready.Status.String(), ready.Version); err != nil {
+	var scenarioVersion, mode, briefing, scenarioJSON string
+	if err := pool.QueryRow(ctx,
+		`SELECT scenario_version, mode, briefing, scenario::text FROM tickets WHERE id = $1`,
+		ticketID).Scan(&scenarioVersion, &mode, &briefing, &scenarioJSON); err != nil {
 		t.Fatal(err)
+	}
+	if scenarioVersion != "v3" || mode != "text" || briefing != "briefing line" {
+		t.Fatalf("snapshot = %s/%s/%s, want v3/text/briefing", scenarioVersion, mode, briefing)
+	}
+	if !strings.Contains(scenarioJSON, "s1") {
+		t.Fatalf("scenario = %q, want stored snapshot", scenarioJSON)
 	}
 
-	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
-	got, err := ticketsRepo.FindByID(ctx, ticket.ID)
-	if err != nil {
+	var typeCode string
+	var tagCount, svcCount int
+	if err := pool.QueryRow(ctx,
+		`SELECT incident_type_code FROM ticket_reference_answers WHERE ticket_id = $1`, ticketID).Scan(&typeCode); err != nil {
 		t.Fatal(err)
 	}
-	if got.ScenarioVersion != "v3" || got.Mode != "text" || got.Briefing != "briefing line" {
-		t.Fatalf("snapshot = %+v, want v3/text/briefing", got)
-	}
-	if got.ScenarioJSON != ticket.ScenarioJSON {
-		t.Fatalf("scenario = %q, want %q", got.ScenarioJSON, ticket.ScenarioJSON)
-	}
-	if !strings.Contains(got.Reference, "101") {
-		t.Fatalf("reference overlay = %q, want the stored reference answer", got.Reference)
-	}
-	gotRef, err := ticketsRepo.FindReference(ctx, ticket.ID)
-	if err != nil {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM reference_answer_tags WHERE ticket_id = $1`, ticketID).Scan(&tagCount); err != nil {
 		t.Fatal(err)
 	}
-	if gotRef.IncidentTypeCode != "101" || len(gotRef.TagCodes) != 1 || len(gotRef.ServiceCodes) != 1 {
-		t.Fatalf("reference = %+v", gotRef)
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM reference_answer_services WHERE ticket_id = $1`, ticketID).Scan(&svcCount); err != nil {
+		t.Fatal(err)
+	}
+	if typeCode != "101" || tagCount != 1 || svcCount != 1 {
+		t.Fatalf("reference = type=%s tags=%d svcs=%d", typeCode, tagCount, svcCount)
 	}
 	done, err := jobsRepo.FindByID(ctx, job.ID)
 	if err != nil {
@@ -103,9 +112,8 @@ func TestApproveAtomically(t *testing.T) {
 	if done.Status != genvo.JobStatusPublished {
 		t.Fatalf("job status = %s, want published", done.Status)
 	}
-	if done.PublishedTicketID == nil || *done.PublishedTicketID != ticket.ID {
-		t.Fatalf("published_ticket_id = %v, want %s", done.PublishedTicketID, ticket.ID)
+	if done.PublishedTicketID == nil || *done.PublishedTicketID != ticketID {
+		t.Fatalf("published_ticket_id = %v, want %s", done.PublishedTicketID, ticketID)
 	}
 }
 
-func ticketID() uuid.UUID { return uuid.New() }

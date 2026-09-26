@@ -1,4 +1,4 @@
-package calls
+package presentation
 
 import (
 	"context"
@@ -7,23 +7,13 @@ import (
 	"net/http"
 	"os"
 
+	"traineebox/internal/calls/application"
+	"traineebox/internal/calls/domain/errs"
+	"traineebox/internal/calls/domain/models"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
-
-	ticketserrs "traineebox/internal/tickets/domain/errs"
 )
-
-// API is the calls owner surface. Ticketgen never dials.
-type API struct {
-	svc          *Service
-	serviceToken string
-	// ResolveActor maps Authorization header → user id (wired to session auth in main).
-	ResolveActor func(ctx context.Context, header string) (uuid.UUID, error)
-}
-
-func NewAPI(svc *Service, serviceToken string) *API {
-	return &API{svc: svc, serviceToken: serviceToken}
-}
 
 func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{
@@ -78,7 +68,7 @@ type callDTO struct {
 	ScenarioID string `json:"scenario_id"`
 }
 
-func toDTO(c Call) callDTO {
+func toDTO(c models.Call) callDTO {
 	return callDTO{ID: c.ID.String(), AttemptID: c.AttemptID.String(), Status: c.Status, ScenarioID: c.ScenarioID}
 }
 
@@ -87,7 +77,7 @@ func (a *API) requestCall(ctx context.Context, in *requestCallIn) (*struct{ Body
 	if err != nil {
 		return nil, err
 	}
-	call, err := a.svc.RequestCall(ctx, RequestCallInput{AttemptID: in.AttemptID, ActorID: actor, To: in.Body.To})
+	call, err := a.svc.RequestCall(ctx, application.RequestCallInput{AttemptID: in.AttemptID, ActorID: actor, To: in.Body.To})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "requestCall: attempt=%s actor=%s err=%v\n", in.AttemptID, actor, err)
 		return nil, mapCallError(err)
@@ -113,9 +103,9 @@ type listCallsIn struct {
 
 func (a *API) listCalls(ctx context.Context, in *listCallsIn) (*struct{ Body []callDTO }, error) {
 	if _, err := a.actorOf(ctx, in.Authorization); err != nil {
-		return nil, err // calls list requires auth (spec H)
+		return nil, err
 	}
-	items, err := a.svc.Calls.ListByAttempt(ctx, in.AttemptID)
+	items, err := a.svc.ListByAttempt(ctx, in.AttemptID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +123,7 @@ type hangupIn struct {
 
 func (a *API) hangup(ctx context.Context, in *hangupIn) (*struct{}, error) {
 	if _, err := a.actorOf(ctx, in.Authorization); err != nil {
-		return nil, err // leg-kill requires auth (spec H)
+		return nil, err
 	}
 	if err := a.svc.Hangup(ctx, in.CallID); err != nil {
 		return nil, mapCallError(err)
@@ -164,7 +154,7 @@ type turnsIn struct {
 	CallID       uuid.UUID `path:"callId"`
 	ServiceToken string    `header:"X-Service-Token"`
 	Body         struct {
-		Turns []Turn `json:"turns"`
+		Turns []models.Turn `json:"turns"`
 	} `json:"body"`
 }
 
@@ -174,13 +164,13 @@ func (a *API) turns(ctx context.Context, in *turnsIn) (*struct{}, error) {
 	}
 	for _, t := range in.Body.Turns {
 		if t.N <= 0 {
-			return nil, huma.Error400BadRequest("turn n must be > 0") // else CHECK trips as 500 (spec P)
+			return nil, huma.Error400BadRequest("turn n must be > 0")
 		}
 	}
-	if _, err := a.svc.Calls.FindByID(ctx, in.CallID); err != nil {
+	if _, err := a.svc.FindByID(ctx, in.CallID); err != nil {
 		return nil, mapCallError(err)
 	}
-	if err := a.svc.Calls.SaveTurns(ctx, in.CallID, in.Body.Turns); err != nil {
+	if err := a.svc.SaveTurns(ctx, in.CallID, in.Body.Turns); err != nil {
 		return nil, err
 	}
 	return &struct{}{}, nil
@@ -188,30 +178,26 @@ func (a *API) turns(ctx context.Context, in *turnsIn) (*struct{}, error) {
 
 func (a *API) authorized(tok string) bool {
 	if a.serviceToken == "" {
-		return false // fail closed: empty token never authorizes (wiring refuses it too)
+		return false
 	}
 	return tok == a.serviceToken
 }
 
 func mapCallError(err error) error {
 	switch {
-	case errors.Is(err, ErrConflict):
+	case errors.Is(err, errs.ErrConflict):
 		return huma.Error409Conflict("call already active")
-	case errors.Is(err, ErrGone):
+	case errors.Is(err, errs.ErrGone):
 		return huma.Error410Gone("attempt deadline passed")
-	case errors.Is(err, ErrBadSnapshot):
+	case errors.Is(err, errs.ErrBadSnapshot):
 		return huma.Error400BadRequest("scenario drift")
-	case errors.Is(err, ErrNotFound):
+	case errors.Is(err, errs.ErrNotFound):
 		return huma.Error404NotFound("no call")
-	case errors.Is(err, ErrInvalidInput):
+	case errors.Is(err, errs.ErrInvalidInput):
 		return huma.Error400BadRequest("invalid input")
+	case errors.Is(err, errs.ErrForbidden):
+		return huma.Error403Forbidden("forbidden")
 	default:
-		if errors.Is(err, ticketserrs.ErrNotFound) {
-			return huma.Error404NotFound("attempt not found")
-		}
-		if errors.Is(err, ticketserrs.ErrForbidden) {
-			return huma.Error403Forbidden("forbidden")
-		}
 		return err
 	}
 }

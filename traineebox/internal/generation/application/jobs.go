@@ -2,21 +2,19 @@ package application
 
 import (
 	"context"
-	"errors"
 
+	"traineebox/internal/generation/domain/abilities"
 	"traineebox/internal/generation/domain/errs"
 	"traineebox/internal/generation/domain/models"
 	"traineebox/internal/generation/domain/repositories"
-	"traineebox/internal/tickets/domain/abilities"
-	ticketserrs "traineebox/internal/tickets/domain/errs"
-	ticketsvo "traineebox/internal/tickets/domain/value_objects"
+	"traineebox/internal/generation/domain/value_objects"
 
 	"github.com/google/uuid"
 )
 
 type SessionUser struct {
 	ID   uuid.UUID
-	Role ticketsvo.AccountRole
+	Role value_objects.AccountRole
 }
 
 type Authenticator interface {
@@ -25,39 +23,13 @@ type Authenticator interface {
 
 func requireManage(ctx context.Context, membership repositories.GroupMembership, groupID, actorID uuid.UUID, admin bool) error {
 	if admin {
-		return mapAbility(abilities.ManageTicket("", true))
+		return abilities.ManageTicket("", true)
 	}
 	role, err := membership.RoleOf(ctx, groupID, actorID)
 	if err != nil {
-		return mapTicketsErr(err)
-	}
-	return mapAbility(abilities.ManageTicket(role, false))
-}
-
-func mapAbility(err error) error {
-	if err == nil {
-		return nil
-	}
-	return mapTicketsErr(err)
-}
-
-func mapTicketsErr(err error) error {
-	switch {
-	case errors.Is(err, ticketserrs.ErrForbidden):
-		return errs.ErrForbidden
-	case errors.Is(err, ticketserrs.ErrNotFound):
-		return errs.ErrNotFound
-	case errors.Is(err, ticketserrs.ErrUnauthorized):
-		return errs.ErrUnauthorized
-	case errors.Is(err, ticketserrs.ErrUserBlocked):
-		return errs.ErrUserBlocked
-	case errors.Is(err, ticketserrs.ErrInvalidInput), errors.Is(err, ticketserrs.ErrInvalidTags), errors.Is(err, ticketserrs.ErrInvalidTagSelection):
-		return errs.ErrInvalidInput
-	case errors.Is(err, ticketserrs.ErrConflict):
-		return errs.ErrConflict
-	default:
 		return err
 	}
+	return abilities.ManageTicket(role, false)
 }
 
 type CreateJob struct {
@@ -132,12 +104,12 @@ type PatchJob struct {
 }
 
 type PatchJobInput struct {
-	ActorID     uuid.UUID
-	Admin       bool
-	JobID       uuid.UUID
-	DraftTitle  string
+	ActorID      uuid.UUID
+	Admin        bool
+	JobID        uuid.UUID
+	DraftTitle   string
 	ScenarioText string
-	Reference   models.DraftReference
+	Reference    models.DraftReference
 }
 
 func (uc PatchJob) Execute(ctx context.Context, in PatchJobInput) (models.Job, error) {

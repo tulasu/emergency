@@ -13,6 +13,8 @@ import (
 	authpresentation "traineebox/internal/auth/presentation"
 	genapp "traineebox/internal/generation/application"
 	generrs "traineebox/internal/generation/domain/errs"
+	"traineebox/internal/generation/domain/repositories"
+	genvo "traineebox/internal/generation/domain/value_objects"
 	geninfra "traineebox/internal/generation/infrastructure"
 	genpresentation "traineebox/internal/generation/presentation"
 	groupsapp "traineebox/internal/groups/application"
@@ -23,6 +25,8 @@ import (
 	"traineebox/internal/platform/config"
 	ticketsapp "traineebox/internal/tickets/application"
 	ticketserrs "traineebox/internal/tickets/domain/errs"
+	ticketsmodels "traineebox/internal/tickets/domain/models"
+	ticketsrepos "traineebox/internal/tickets/domain/repositories"
 	ticketsvo "traineebox/internal/tickets/domain/value_objects"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 	ticketspresentation "traineebox/internal/tickets/presentation"
@@ -105,7 +109,7 @@ func (a generationSessionAuthenticator) CurrentUser(ctx context.Context, token s
 	if err != nil {
 		return genapp.SessionUser{}, mapGenerationAuthError(err)
 	}
-	role, err := ticketsvo.ParseAccountRole(string(user.Role))
+	role, err := genvo.ParseAccountRole(string(user.Role))
 	if err != nil {
 		return genapp.SessionUser{}, err
 	}
@@ -198,16 +202,19 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	})
 
 	jobsRepo := geninfra.NewJobRepository(pool)
+	genMembership := testGenerationMembership{inner: membership}
+	genCatalog := testGenerationCatalog{tickets: catalogRepo}
+	genPublisher := testGenerationPublisher{pool: pool}
 	genHandlers := genpresentation.NewAPI(genpresentation.Deps{
-		CreateJob: genapp.CreateJob{Jobs: jobsRepo, Membership: membership},
-		ListJobs:  genapp.ListJobs{Jobs: jobsRepo, Membership: membership},
-		GetJob:    genapp.GetJob{Jobs: jobsRepo, Membership: membership},
-		PatchJob:  genapp.PatchJob{Jobs: jobsRepo, Membership: membership},
-		RetryJob:  genapp.RetryJob{Jobs: jobsRepo, Membership: membership},
-		CancelJob: genapp.CancelJob{Jobs: jobsRepo, Membership: membership},
-		DeleteJob: genapp.DeleteJob{Jobs: jobsRepo, Membership: membership},
+		CreateJob: genapp.CreateJob{Jobs: jobsRepo, Membership: genMembership},
+		ListJobs:  genapp.ListJobs{Jobs: jobsRepo, Membership: genMembership},
+		GetJob:    genapp.GetJob{Jobs: jobsRepo, Membership: genMembership},
+		PatchJob:  genapp.PatchJob{Jobs: jobsRepo, Membership: genMembership},
+		RetryJob:  genapp.RetryJob{Jobs: jobsRepo, Membership: genMembership},
+		CancelJob: genapp.CancelJob{Jobs: jobsRepo, Membership: genMembership},
+		DeleteJob: genapp.DeleteJob{Jobs: jobsRepo, Membership: genMembership},
 		ApproveJob: genapp.ApproveJob{
-			Jobs: jobsRepo, Membership: membership, Tickets: ticketsRepo, Catalog: catalogRepo,
+			Jobs: jobsRepo, Membership: genMembership, Catalog: genCatalog, Publisher: genPublisher,
 		},
 		Authenticate: generationSessionAuthenticator{auth: authenticate},
 	})
@@ -255,6 +262,81 @@ func (e testStudentEnroller) EnrollStudent(ctx context.Context, actorID uuid.UUI
 		return autherrs.ErrInvalidInput
 	case errors.Is(err, groupserrs.ErrUserBlocked):
 		return autherrs.ErrUserBlocked
+	default:
+		return err
+	}
+}
+
+type testGenerationMembership struct {
+	inner ticketsrepos.GroupMembership
+}
+
+func (m testGenerationMembership) RoleOf(ctx context.Context, groupID, userID uuid.UUID) (genvo.MemberRole, error) {
+	role, err := m.inner.RoleOf(ctx, groupID, userID)
+	if err != nil {
+		return "", mapTicketsToGeneration(err)
+	}
+	parsed, err := genvo.ParseMemberRole(role.String())
+	if err != nil {
+		return "", generrs.ErrInvalidInput
+	}
+	return parsed, nil
+}
+
+type testGenerationCatalog struct {
+	tickets ticketsrepos.CatalogRepository
+}
+
+func (c testGenerationCatalog) IncidentTypeExists(ctx context.Context, code string) error {
+	_, err := c.tickets.FindIncidentTypeByCode(ctx, code)
+	return mapTicketsToGeneration(err)
+}
+
+func (c testGenerationCatalog) ValidateTags(ctx context.Context, incidentType string, tags []string) error {
+	groups, err := c.tickets.ListTagGroupsByType(ctx, incidentType)
+	if err != nil {
+		return mapTicketsToGeneration(err)
+	}
+	ref, err := ticketsmodels.NewReferenceAnswer(uuid.New(), incidentType, tags, nil, "", "", "", "")
+	if err != nil {
+		return mapTicketsToGeneration(err)
+	}
+	return mapTicketsToGeneration(ref.ValidateTagSelection(groups))
+}
+
+func (c testGenerationCatalog) ServicesExist(ctx context.Context, codes []string) (bool, error) {
+	ok, err := c.tickets.ServiceExists(ctx, codes)
+	return ok, mapTicketsToGeneration(err)
+}
+
+type testGenerationPublisher struct {
+	pool *pgxpool.Pool
+}
+
+func (p testGenerationPublisher) Publish(ctx context.Context, draft repositories.PublishDraft) (uuid.UUID, error) {
+	if err := geninfra.ApproveAtomically(ctx, p.pool, draft); err != nil {
+		return uuid.Nil, err
+	}
+	return draft.TicketID, nil
+}
+
+func mapTicketsToGeneration(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, ticketserrs.ErrForbidden):
+		return generrs.ErrForbidden
+	case errors.Is(err, ticketserrs.ErrNotFound):
+		return generrs.ErrNotFound
+	case errors.Is(err, ticketserrs.ErrUnauthorized):
+		return generrs.ErrUnauthorized
+	case errors.Is(err, ticketserrs.ErrUserBlocked):
+		return generrs.ErrUserBlocked
+	case errors.Is(err, ticketserrs.ErrInvalidInput), errors.Is(err, ticketserrs.ErrInvalidTags), errors.Is(err, ticketserrs.ErrInvalidTagSelection):
+		return generrs.ErrInvalidInput
+	case errors.Is(err, ticketserrs.ErrConflict):
+		return generrs.ErrConflict
 	default:
 		return err
 	}

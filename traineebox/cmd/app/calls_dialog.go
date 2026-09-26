@@ -10,12 +10,18 @@ import (
 	"time"
 
 	"traineebox/internal/auth/application"
-	"traineebox/internal/calls"
-	"traineebox/internal/dialog"
+	callsapp "traineebox/internal/calls/application"
+	callserrs "traineebox/internal/calls/domain/errs"
+	callsinfra "traineebox/internal/calls/infrastructure"
+	callspresentation "traineebox/internal/calls/presentation"
+	dialogapp "traineebox/internal/dialog/application"
+	dialogerrs "traineebox/internal/dialog/domain/errs"
+	dialoginfra "traineebox/internal/dialog/infrastructure"
+	dialogpresentation "traineebox/internal/dialog/presentation"
+	"traineebox/internal/generation/domain/repositories"
 	geninfra "traineebox/internal/generation/infrastructure"
 	genworker "traineebox/internal/generation/worker"
 	ticketserrs "traineebox/internal/tickets/domain/errs"
-	ticketsrepos "traineebox/internal/tickets/domain/repositories"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -24,12 +30,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ticketsCatalog is the catalog surface the generation worker checks against.
-type ticketsCatalog = ticketsrepos.CatalogRepository
-
-// wireCallsAndDialog adds owner-executor voice wiring (AD-1/AD-2/AD-6/AD-9).
-// Ticketgen never dials; dialog writes turns only via service-token internal
-// endpoints on close; hot call path never hits DB (snapshot lives in dialog).
 func wireCallsAndDialog(
 	api huma.API,
 	pool *pgxpool.Pool,
@@ -37,35 +37,31 @@ func wireCallsAndDialog(
 	ticketsRepo *ticketsinfra.TicketRepository,
 	attemptsRepo *ticketsinfra.AttemptRepository,
 	jobsRepo *geninfra.JobRepository,
-	catalogRepo ticketsCatalog,
+	catalogRepo repositories.Catalog,
 ) {
-	dialogRepo := dialog.NewRepository(pool)
-	callsRepo := calls.NewRepository(pool)
+	dialogRepo := dialoginfra.NewBankRepository(pool)
+	callsRepo := callsinfra.NewCallRepository(pool)
 	serviceToken := os.Getenv("INTERNAL_SERVICE_TOKEN")
 	if serviceToken == "" {
-		// Fail closed: internal endpoints must never accept an empty token.
 		log.Fatal("INTERNAL_SERVICE_TOKEN must be set")
 	}
 	dialogURL := os.Getenv("DIALOG_URL")
 
-	svc := &calls.Service{
-		Calls:     callsRepo,
-		ARI:       calls.ARIFromEnv(),
-		DialogURL: dialogURL,
+	svc := &callsapp.Service{
+		Calls:    callsRepo,
+		Dialer:   callsinfra.ARIFromEnv(),
+		Sessions: callsinfra.NewDialogClient(dialogURL),
 		MarkAttemptTimedOut: func(ctx context.Context, attemptID uuid.UUID) error {
-			// Deadline race closes the attempt too; the update is conditional
-			// on status still in_progress so a submitted attempt is never clobbered.
 			return attemptsRepo.MarkTimedOut(ctx, attemptID)
 		},
 		ResolveEndpoint: func(ctx context.Context, userID uuid.UUID) (string, error) {
-			// `to` resolves from user_sip_endpoints, never trusted blindly (spec H).
 			var endpoint string
 			err := pool.QueryRow(ctx,
 				`SELECT endpoint FROM user_sip_endpoints WHERE user_id = $1 AND enabled`,
 				userID).Scan(&endpoint)
 			if err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
-					return "", calls.ErrInvalidInput
+					return "", callserrs.ErrInvalidInput
 				}
 				return "", err
 			}
@@ -74,17 +70,17 @@ func wireCallsAndDialog(
 		LoadAttempt: func(ctx context.Context, attemptID, actorID uuid.UUID) (uuid.UUID, uuid.UUID, *time.Time, string, error) {
 			attempt, err := attemptsRepo.FindByID(ctx, attemptID)
 			if err != nil {
-				return uuid.Nil, uuid.Nil, nil, "", err
+				return uuid.Nil, uuid.Nil, nil, "", mapTicketsToCalls(err)
 			}
 			if actorID != uuid.Nil && actorID != attempt.UserID {
-				return uuid.Nil, uuid.Nil, nil, "", ticketserrs.ErrForbidden
+				return uuid.Nil, uuid.Nil, nil, "", callserrs.ErrForbidden
 			}
 			return attempt.TicketID, attempt.UserID, attempt.DeadlineAt, attempt.Status.String(), nil
 		},
 		LoadTicket: func(ctx context.Context, ticketID uuid.UUID) (string, string, string, error) {
 			ticket, err := ticketsRepo.FindByID(ctx, ticketID)
 			if err != nil {
-				return "", "", "", err
+				return "", "", "", mapTicketsToCalls(err)
 			}
 			scenarioID := ticket.ScenarioVersion
 			scenarioJSON := ticket.ScenarioJSON
@@ -110,7 +106,7 @@ func wireCallsAndDialog(
 		},
 	}
 
-	callsAPI := calls.NewAPI(svc, serviceToken)
+	callsAPI := callspresentation.NewAPI(svc, serviceToken)
 	callsAPI.ResolveActor = func(ctx context.Context, header string) (uuid.UUID, error) {
 		user, err := authenticate.Execute(ctx, bearerOf(header))
 		if err != nil {
@@ -118,7 +114,7 @@ func wireCallsAndDialog(
 		}
 		return user.ID, nil
 	}
-	calls.Register(api, callsAPI)
+	callspresentation.Register(api, callsAPI)
 
 	dialogURLs := []string{}
 	if dialogURL != "" {
@@ -131,19 +127,59 @@ func wireCallsAndDialog(
 			}
 		}
 	}
-	dialogAPI := dialog.NewAPI(dialogRepo, dialogURLs, serviceToken)
-	dialogAPI.SaveScenario = ticketsRepo.UpdateDialogSnapshot
-	dialogAPI.ResolveActor = callsAPI.ResolveActor
-	dialog.Register(api, dialogAPI)
+	workers := dialoginfra.NewWorkerClient()
+	dialogAPI := dialogpresentation.NewAPI(dialogpresentation.Deps{
+		Put: dialogapp.PutScenario{
+			Bank: dialogRepo,
+			Store: dialogScenarioStore{save: func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error {
+				if err := ticketsRepo.UpdateDialogSnapshot(ctx, ticketID, scenarioJSON, version); err != nil {
+					return mapTicketsToDialog(err)
+				}
+				return nil
+			}},
+		},
+		Reload: dialogapp.ReloadBank{
+			Bank: dialogRepo, Workers: workers, URLs: dialogURLs, Token: serviceToken,
+		},
+		Version:      dialogapp.BankVersion{Bank: dialogRepo},
+		Lint:         dialogapp.LintScenario{Bank: dialogRepo, Workers: workers, URLs: dialogURLs, Token: serviceToken},
+		ServiceToken: serviceToken,
+		ResolveActor: callsAPI.ResolveActor,
+	})
+	dialogpresentation.Register(api, dialogAPI)
 
-	// Deadline ticker: expired calls hang up + time out without an event (spec Q).
 	go svc.WatchDeadlines(context.Background(), 15*time.Second, nil)
-	// Generation driver: claims building_dialog/checking_dialog via ticketgen HTTP (spec K).
 	if catalogRepo != nil {
-		go genworker.FromEnv(jobsRepo, catalogRepo).Loop(context.Background())
+		go genworker.FromEnv(newGenerationDrive(jobsRepo, catalogRepo, dialogURLs, serviceToken)).Loop(context.Background())
 	} else {
 		log.Print("generation worker disabled (no catalog)")
 	}
+}
+
+type dialogScenarioStore struct {
+	save func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error
+}
+
+func (s dialogScenarioStore) Save(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error {
+	return s.save(ctx, ticketID, scenarioJSON, version)
+}
+
+func mapTicketsToCalls(err error) error {
+	switch {
+	case errors.Is(err, ticketserrs.ErrNotFound):
+		return callserrs.ErrNotFound
+	case errors.Is(err, ticketserrs.ErrForbidden):
+		return callserrs.ErrForbidden
+	default:
+		return err
+	}
+}
+
+func mapTicketsToDialog(err error) error {
+	if errors.Is(err, ticketserrs.ErrNotFound) {
+		return dialogerrs.ErrNotFound
+	}
+	return err
 }
 
 func bearerOf(header string) string {

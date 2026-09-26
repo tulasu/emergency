@@ -2,13 +2,12 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"traineebox/internal/generation/domain/errs"
 	"traineebox/internal/generation/domain/models"
 	"traineebox/internal/generation/domain/repositories"
-	ticketsmodels "traineebox/internal/tickets/domain/models"
-	ticketsrepos "traineebox/internal/tickets/domain/repositories"
-	ticketsvo "traineebox/internal/tickets/domain/value_objects"
+	"traineebox/internal/generation/domain/value_objects"
 
 	"github.com/google/uuid"
 )
@@ -16,11 +15,8 @@ import (
 type ApproveJob struct {
 	Jobs       repositories.JobRepository
 	Membership repositories.GroupMembership
-	Tickets    ticketsrepos.TicketRepository
-	Catalog    ticketsrepos.CatalogRepository
-	// Atomically publishes ticket+reference+job in one txn when set.
-	// Nil keeps the legacy two-step path (tests/fakes).
-	AtomicPublish func(ctx context.Context, ticket ticketsmodels.Ticket, ref ticketsmodels.ReferenceAnswer, jobID uuid.UUID, expectedStatus string, expectedVersion int) error
+	Catalog    repositories.Catalog
+	Publisher  repositories.TicketPublisher
 }
 
 type ApproveJobInput struct {
@@ -41,67 +37,50 @@ func (uc ApproveJob) Execute(ctx context.Context, in ApproveJobInput) (models.Jo
 	expectedVersion := job.Version
 
 	draft := job.DraftReference.Normalize()
-	title, err := ticketsvo.NewTicketTitle(job.DraftTitle)
+	title, err := value_objects.NewTicketTitle(job.DraftTitle)
 	if err != nil {
-		return models.Job{}, mapTicketsErr(err)
+		return models.Job{}, err
 	}
-	if _, err := uc.Catalog.FindIncidentTypeByCode(ctx, draft.IncidentTypeCode); err != nil {
-		return models.Job{}, mapTicketsErr(err)
+	if err := uc.Catalog.IncidentTypeExists(ctx, draft.IncidentTypeCode); err != nil {
+		return models.Job{}, err
 	}
-	groups, err := uc.Catalog.ListTagGroupsByType(ctx, draft.IncidentTypeCode)
-	if err != nil {
-		return models.Job{}, mapTicketsErr(err)
-	}
-	ticket, err := ticketsmodels.NewTicket(
-		job.GroupID, title, job.ScenarioText, in.ActorID, nil, nil, nil, nil,
-	)
-	if err != nil {
-		return models.Job{}, mapTicketsErr(err)
-	}
-	// Dialog snapshot travels with the ticket; mode defaults to voice (AD-9).
-	// Generated tickets carry no teacher snapshot yet: '{}' keeps the jsonb
-	// cast valid until PUT /scenario authors the real one (spec C).
-	ticket.Mode = "voice"
-	ticket.Briefing = job.ScenarioText
-	if ticket.ScenarioJSON == "" {
-		ticket.ScenarioJSON = "{}"
-	}
-	ref, err := ticketsmodels.NewReferenceAnswer(
-		ticket.ID, draft.IncidentTypeCode, draft.TagCodes, draft.ServiceCodes,
-		draft.ApplicantLastName, draft.ApplicantFirstName, draft.CallerNumber, draft.DictatedNumber,
-	)
-	if err != nil {
-		return models.Job{}, mapTicketsErr(err)
-	}
-	if err := ref.ValidateTagSelection(groups); err != nil {
-		return models.Job{}, mapTicketsErr(err)
+	if err := uc.Catalog.ValidateTags(ctx, draft.IncidentTypeCode, draft.TagCodes); err != nil {
+		return models.Job{}, err
 	}
 	if len(draft.ServiceCodes) > 0 {
-		ok, err := uc.Catalog.ServiceExists(ctx, draft.ServiceCodes)
+		ok, err := uc.Catalog.ServicesExist(ctx, draft.ServiceCodes)
 		if err != nil {
-			return models.Job{}, mapTicketsErr(err)
+			return models.Job{}, err
 		}
 		if !ok {
 			return models.Job{}, errs.ErrInvalidInput
 		}
 	}
-	if uc.AtomicPublish != nil {
-		if err := uc.AtomicPublish(ctx, ticket, ref, job.ID, expectedStatus, expectedVersion); err != nil {
-			return models.Job{}, err
-		}
-		if err := job.MarkPublished(ticket.ID); err != nil {
-			return models.Job{}, err
-		}
-		job.Version = expectedVersion + 1
-		return job, nil
+
+	scenarioJSON := job.ScenarioText
+	if scenarioJSON == "" {
+		scenarioJSON = "{}"
 	}
-	if err := uc.Tickets.CreateWithReference(ctx, ticket, ref); err != nil {
+	ticketID := uuid.New()
+	publishedID, err := uc.Publisher.Publish(ctx, repositories.PublishDraft{
+		TicketID:        ticketID,
+		GroupID:         job.GroupID,
+		Title:           title.String(),
+		Body:            job.ScenarioText,
+		CreatedBy:       in.ActorID,
+		CreatedAt:       time.Now().UTC(),
+		ScenarioJSON:    scenarioJSON,
+		Mode:            "voice",
+		Briefing:        job.ScenarioText,
+		Reference:       draft,
+		JobID:           job.ID,
+		ExpectedStatus:  expectedStatus,
+		ExpectedVersion: expectedVersion,
+	})
+	if err != nil {
 		return models.Job{}, err
 	}
-	if err := job.MarkPublished(ticket.ID); err != nil {
-		return models.Job{}, err
-	}
-	if err := uc.Jobs.SaveCAS(ctx, job, expectedStatus, expectedVersion); err != nil {
+	if err := job.MarkPublished(publishedID); err != nil {
 		return models.Job{}, err
 	}
 	job.Version = expectedVersion + 1

@@ -8,6 +8,7 @@ import (
 	autherrs "traineebox/internal/auth/domain/errs"
 	genapp "traineebox/internal/generation/application"
 	generrs "traineebox/internal/generation/domain/errs"
+	genvo "traineebox/internal/generation/domain/value_objects"
 	groupsapp "traineebox/internal/groups/application"
 	groupserrs "traineebox/internal/groups/domain/errs"
 	groupsvo "traineebox/internal/groups/domain/value_objects"
@@ -87,7 +88,7 @@ func (a generationSessionAuthenticator) CurrentUser(ctx context.Context, token s
 	if err != nil {
 		return genapp.SessionUser{}, mapGenerationAuthError(err)
 	}
-	role, err := ticketsvo.ParseAccountRole(string(user.Role))
+	role, err := genvo.ParseAccountRole(string(user.Role))
 	if err != nil {
 		return genapp.SessionUser{}, err
 	}

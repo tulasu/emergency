@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
 )
 
@@ -17,11 +16,11 @@ func TestGroupsFlow(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "admin1", "password1", value_objects.RoleAdmin)
-	owner := testkit.SeedUser(t, pool, "owner1", "password1", value_objects.RoleTeacher)
-	coTeacher := testkit.SeedUser(t, pool, "coteach1", "password1", value_objects.RoleTeacher)
-	student := testkit.SeedUser(t, pool, "stud1", "password1", value_objects.RoleStudent)
-	outsider := testkit.SeedUser(t, pool, "stud2", "password1", value_objects.RoleStudent)
+	_ = testkit.SeedUser(t, pool, "admin1", "password1", "admin")
+	owner := testkit.SeedUser(t, pool, "owner1", "password1", "teacher")
+	coTeacher := testkit.SeedUser(t, pool, "coteach1", "password1", "teacher")
+	student := testkit.SeedUser(t, pool, "stud1", "password1", "student")
+	outsider := testkit.SeedUser(t, pool, "stud2", "password1", "student")
 
 	adminToken := loginToken(t, handler, "admin1", "password1")
 	ownerToken := loginToken(t, handler, "owner1", "password1")

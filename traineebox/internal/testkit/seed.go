@@ -7,14 +7,13 @@ import (
 
 	"traineebox/internal/auth/application"
 	"traineebox/internal/auth/domain/models"
-	"traineebox/internal/auth/domain/value_objects"
 	authinfra "traineebox/internal/auth/infrastructure"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SeedUser(t *testing.T, pool *pgxpool.Pool, login, password string, role value_objects.Role) models.User {
+func SeedUser(t *testing.T, pool *pgxpool.Pool, login, password, role string) models.User {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -26,7 +25,7 @@ func SeedUser(t *testing.T, pool *pgxpool.Pool, login, password string, role val
 	user, err := uc.Execute(ctx, application.CreateUserInput{
 		Login:    login,
 		Password: password,
-		Role:     string(role),
+		Role:     role,
 	})
 	if err != nil {
 		t.Fatalf("seed user %q: %v", login, err)

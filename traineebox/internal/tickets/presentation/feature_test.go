@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
 )
 
@@ -18,8 +17,8 @@ func TestTicketsAttemptFlow(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "owner1", "password1", value_objects.RoleTeacher)
-	_ = testkit.SeedUser(t, pool, "stud1", "password1", value_objects.RoleStudent)
+	_ = testkit.SeedUser(t, pool, "owner1", "password1", "teacher")
+	_ = testkit.SeedUser(t, pool, "stud1", "password1", "student")
 	ownerToken := loginToken(t, handler, "owner1", "password1")
 	studentToken := loginToken(t, handler, "stud1", "password1")
 
@@ -130,8 +129,8 @@ func TestTicketsAutoExpire(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "owner2", "password1", value_objects.RoleTeacher)
-	_ = testkit.SeedUser(t, pool, "stud2", "password1", value_objects.RoleStudent)
+	_ = testkit.SeedUser(t, pool, "owner2", "password1", "teacher")
+	_ = testkit.SeedUser(t, pool, "stud2", "password1", "student")
 	ownerToken := loginToken(t, handler, "owner2", "password1")
 	studentToken := loginToken(t, handler, "stud2", "password1")
 

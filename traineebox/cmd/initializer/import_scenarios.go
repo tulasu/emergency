@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"traineebox/internal/dialog"
+	dialoginfra "traineebox/internal/dialog/infrastructure"
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
 
@@ -106,7 +106,7 @@ func importScenarios(ctx context.Context, dsn string) (imported, scenarios, skip
 	}
 	defer pool.Close()
 
-	known, err := dialog.NewRepository(pool).ListSlotIDs(ctx)
+	known, err := dialoginfra.NewBankRepository(pool).ListSlotIDs(ctx)
 	if err != nil {
 		return 0, 0, 0, err
 	}

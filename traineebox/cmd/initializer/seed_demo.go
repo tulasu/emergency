@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"traineebox/internal/auth/application"
-	"traineebox/internal/dialog"
+	dialoginfra "traineebox/internal/dialog/infrastructure"
 	"traineebox/internal/platform/config"
 	"traineebox/internal/platform/postgres"
 
@@ -150,7 +150,7 @@ func seedDemo(ctx context.Context, cfg config.Config, opts demoOptions) error {
 		fmt.Fprintf(os.Stderr, "warn: bank reload failed (attempt may use stale digest): %v\n", err)
 	}
 	// 5. Current canon digest (recomputed by reload's ReplaceBank).
-	_, digest, err := dialog.NewRepository(pool).BankVersion(ctx)
+	_, digest, err := dialoginfra.NewBankRepository(pool).BankVersion(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warn: bank version: %v\n", err)
 		digest = ""

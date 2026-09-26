@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"traineebox/internal/auth/domain/value_objects"
 	"traineebox/internal/testkit"
 )
 
@@ -27,7 +26,7 @@ func TestAuthFlow(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	admin := testkit.SeedUser(t, pool, "admin", "password1", value_objects.RoleAdmin)
+	admin := testkit.SeedUser(t, pool, "admin", "password1", "admin")
 
 	loginRes := doRequest(t, handler, http.MethodPost, "/auth/login", "", map[string]string{
 		"login": "admin", "password": "password1",
@@ -67,7 +66,7 @@ func TestBlockedUser(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	u := testkit.SeedUser(t, pool, "blocked", "password1", value_objects.RoleStudent)
+	u := testkit.SeedUser(t, pool, "blocked", "password1", "student")
 	testkit.SetBlocked(t, pool, u.ID, true)
 
 	loginRes := doRequest(t, handler, http.MethodPost, "/auth/login", "", map[string]string{
@@ -83,8 +82,8 @@ func TestAdminRBAC(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "admin", "password1", value_objects.RoleAdmin)
-	teacher := testkit.SeedUser(t, pool, "teacher", "password1", value_objects.RoleTeacher)
+	_ = testkit.SeedUser(t, pool, "admin", "password1", "admin")
+	teacher := testkit.SeedUser(t, pool, "teacher", "password1", "teacher")
 
 	adminToken := loginToken(t, handler, "admin", "password1")
 	teacherToken := loginToken(t, handler, "teacher", "password1")
@@ -137,9 +136,9 @@ func TestProvisionBatch(t *testing.T) {
 	testkit.Truncate(t, pool)
 	handler := testkit.NewAPI(t, pool)
 
-	_ = testkit.SeedUser(t, pool, "admin", "password1", value_objects.RoleAdmin)
-	_ = testkit.SeedUser(t, pool, "teacher", "password1", value_objects.RoleTeacher)
-	_ = testkit.SeedUser(t, pool, "student", "password1", value_objects.RoleStudent)
+	_ = testkit.SeedUser(t, pool, "admin", "password1", "admin")
+	_ = testkit.SeedUser(t, pool, "teacher", "password1", "teacher")
+	_ = testkit.SeedUser(t, pool, "student", "password1", "student")
 	adminToken := loginToken(t, handler, "admin", "password1")
 	teacherToken := loginToken(t, handler, "teacher", "password1")
 	studentToken := loginToken(t, handler, "student", "password1")

@@ -6,7 +6,10 @@ COPY dialog/ ./dialog/
 # Prod ML (torch/onnx/cuda/llama-server) stays out of this CPU image.
 RUN pip install --no-cache-dir pyyaml numpy pymorphy3 razdel
 ENV PYTHONUNBUFFERED=1 \
-    DIALOG_WAV_DIR=/tmp/dialog-wav
+    DIALOG_WAV_DIR=/tmp/dialog-wav \
+    AUDIO_CACHE_DIR=/tmp/dialog-audio \
+    AUDIO_CACHE_MB=500 \
+    AUDIO_HTTP_TIMEOUT=0.25
 # Unprivileged runtime: binds 8000/9001 only, wavs stay on a tmp volume.
 USER nobody
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"

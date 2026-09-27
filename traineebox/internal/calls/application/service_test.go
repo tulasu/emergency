@@ -94,9 +94,11 @@ func (f *fakeDialer) Hangup(string) error { return nil }
 
 type fakeSessions struct {
 	openErr error
+	audio   *AudioReference
 }
 
-func (f *fakeSessions) Open(_ context.Context, call models.Call, _ string) error {
+func (f *fakeSessions) Open(_ context.Context, call models.Call, _ string, audio *AudioReference) error {
+	f.audio = audio
 	if f.openErr != nil {
 		return f.openErr
 	}
@@ -116,8 +118,8 @@ func testService(fs *fakeStore, dialer *fakeDialer, sessions *fakeSessions) *Ser
 		LoadAttempt: func(_ context.Context, _, _ uuid.UUID) (uuid.UUID, uuid.UUID, *time.Time, string, error) {
 			return uuid.New(), uuid.New(), nil, "in_progress", nil
 		},
-		LoadTicket: func(_ context.Context, _ uuid.UUID) (string, string, string, error) {
-			return "sc1", `{"id":"sc1"}`, "abc123", nil
+		LoadTicket: func(_ context.Context, _ uuid.UUID) (TicketSnapshot, error) {
+			return TicketSnapshot{ScenarioID: "sc1", ScenarioJSON: `{"id":"sc1"}`, BankDigest: "abc123"}, nil
 		},
 	}
 }
@@ -126,8 +128,8 @@ func TestRequestCallDriftNeverOriginates(t *testing.T) {
 	fs := newFakeStore()
 	dialer := &fakeDialer{}
 	svc := testService(fs, dialer, &fakeSessions{})
-	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (string, string, string, error) {
-		return "sc1", `{"id":"sc1"}`, "drift", nil
+	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (TicketSnapshot, error) {
+		return TicketSnapshot{ScenarioID: "sc1", ScenarioJSON: `{"id":"sc1"}`, BankDigest: "drift"}, nil
 	}
 	_, err := svc.RequestCall(context.Background(), RequestCallInput{
 		AttemptID: uuid.New(), ActorID: uuid.New(), To: "op_test",
@@ -161,6 +163,40 @@ func TestRequestCallSuccess(t *testing.T) {
 	}
 }
 
+func TestRequestCallForwardsOnlyReadyAudio(t *testing.T) {
+	fs := newFakeStore()
+	dialer := &fakeDialer{}
+	sessions := &fakeSessions{}
+	svc := testService(fs, dialer, sessions)
+	ticketID := uuid.New()
+	svc.LoadAttempt = func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (uuid.UUID, uuid.UUID, *time.Time, string, error) {
+		return ticketID, uuid.New(), nil, "in_progress", nil
+	}
+	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (TicketSnapshot, error) {
+		return TicketSnapshot{
+			ScenarioID: "sc1", ScenarioJSON: `{"id":"sc1"}`, BankDigest: "bank",
+			AudioDigest: "audio-digest", AudioStatus: "ready",
+		}, nil
+	}
+	if _, err := svc.RequestCall(context.Background(), RequestCallInput{AttemptID: uuid.New(), ActorID: uuid.New(), To: "op_test"}); err != nil {
+		t.Fatal(err)
+	}
+	if sessions.audio == nil || sessions.audio.TicketID != ticketID || sessions.audio.Digest != "audio-digest" {
+		t.Fatalf("audio = %+v", sessions.audio)
+	}
+
+	sessions.audio = &AudioReference{}
+	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (TicketSnapshot, error) {
+		return TicketSnapshot{ScenarioID: "sc1", ScenarioJSON: `{"id":"sc1"}`, BankDigest: "bank", AudioDigest: "audio-digest", AudioStatus: "pending"}, nil
+	}
+	if _, err := svc.RequestCall(context.Background(), RequestCallInput{AttemptID: uuid.New(), ActorID: uuid.New(), To: "op_test"}); err != nil {
+		t.Fatal(err)
+	}
+	if sessions.audio != nil {
+		t.Fatalf("pending audio = %+v, want nil", sessions.audio)
+	}
+}
+
 func TestRequestCallRejectedInputs(t *testing.T) {
 	fs := newFakeStore()
 	dialer := &fakeDialer{}
@@ -181,8 +217,8 @@ func TestRequestCallRejectedInputs(t *testing.T) {
 	}); !errors.Is(err, errs.ErrInvalidInput) {
 		t.Fatalf("nil actor = %v, want ErrInvalidInput", err)
 	}
-	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (string, string, string, error) {
-		return "sc1", `{"id":"sc1"}`, "", nil
+	svc.LoadTicket = func(_ context.Context, _ uuid.UUID) (TicketSnapshot, error) {
+		return TicketSnapshot{ScenarioID: "sc1", ScenarioJSON: `{"id":"sc1"}`}, nil
 	}
 	if _, err := svc.RequestCall(context.Background(), RequestCallInput{
 		AttemptID: uuid.New(), ActorID: uuid.New(), To: "op_test",

@@ -11,6 +11,8 @@ import uuid as _uuid
 from pathlib import Path
 
 from dialog.core.data.ontology import Ontology  # frozen kinds/labels
+from dialog.core.media.audio_cache import manifest as audio_manifest
+from dialog.core.media.audio_cache import prefetch as prefetch_audio
 from dialog.core.nlu.bank import LexicalBank
 from dialog.core.nlu.cascade import Cascade
 from dialog.core.session import Session
@@ -60,8 +62,8 @@ def norm_sid(session_id: str) -> str:
 
 
 def open_session(session_id: str, snapshot: dict, bank: Bank | None = None,
-                 expected_digest: str = "") -> str:
-    """Validate + build a session bound to one bank snapshot. Raises KeyError/ValueError."""
+                 expected_digest: str = "", audio: object = None) -> str:
+    """Validate + bind a session and its best-effort prerecorded manifest."""
     try:
         sid = norm_sid(session_id)
     except ValueError:
@@ -82,13 +84,16 @@ def open_session(session_id: str, snapshot: dict, bank: Bank | None = None,
         cascade = _frozen_ensemble(sc, lexical, cascade, onto_used)
     sess = Session.open(sc, cascade, onto_used)
     sess.improv = impro
+    fragments = audio_manifest(audio)
     with GUARD:
         if len(SESSIONS) >= MAX_SESSIONS:
             raise BusyError(f"too many sessions (cap {MAX_SESSIONS})")
         if sid in SESSIONS:
             raise KeyError(f"session {sid} exists")
         SESSIONS[sid] = {"session": sess, "lock": threading.Lock(),
-                         "bank": bank, "onto": onto_used}
+                         "bank": bank, "onto": onto_used, "audio": fragments}
+    if fragments:
+        prefetch_audio(fragments)
     return sess.opening()
 
 

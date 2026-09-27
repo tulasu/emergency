@@ -21,8 +21,14 @@ import subprocess
 import threading
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+import sys
 
-from speakable import speakable
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if (_REPO_ROOT / "dialog").is_dir():
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from dialog.core.media.speakable import speakable
 
 VOICES = ("aidar", "baya", "kseniya", "xenia", "eugene")
 DEFAULT_VOICE = os.environ.get("SYNTH_VOICE", "kseniya")

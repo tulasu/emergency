@@ -7,7 +7,10 @@ WORKDIR /app
 COPY dialog/ ./dialog/
 # Runtime deps already in base image; nothing to pip-install here.
 ENV PYTHONUNBUFFERED=1 \
-    DIALOG_WAV_DIR=/tmp/dialog-wav
+    DIALOG_WAV_DIR=/tmp/dialog-wav \
+    AUDIO_CACHE_DIR=/tmp/dialog-audio \
+    AUDIO_CACHE_MB=500 \
+    AUDIO_HTTP_TIMEOUT=0.25
 # Runs as root (base image default): torch/HF caches write to /root/.cache.
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 EXPOSE 8000 9001

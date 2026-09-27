@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type Config struct {
 	SessionTTL    time.Duration
 	CatalogPath   string
 	MediaPath     string
+	AudioURL      string
 }
 
 func Load() (Config, error) {
@@ -25,6 +27,7 @@ func Load() (Config, error) {
 		SessionTTL:    24 * time.Hour,
 		CatalogPath:   envOr("TRAINEEBOX_CATALOG_PATH", defaultCatalogPath()),
 		MediaPath:     envOr("TRAINEEBOX_MEDIA_PATH", defaultMediaPath()),
+		AudioURL:      strings.TrimSpace(os.Getenv("AUDIO_URL")),
 	}
 	if v := os.Getenv("TRAINEEBOX_SESSION_TTL_HOURS"); v != "" {
 		h, err := strconv.Atoi(v)

@@ -12,10 +12,18 @@ type Fragment struct {
 	Text string `json:"text"`
 }
 
-// Fskey mirrors dialog fskey (# → _, / → _).
+// Fskey encodes UTF-8 bytes as a unique, path-safe fragment component.
 func Fskey(key string) string {
-	r := strings.ReplaceAll(key, "#", "_")
-	return strings.ReplaceAll(r, "/", "_")
+	const hexDigits = "0123456789abcdef"
+	var b strings.Builder
+	b.Grow(2 + 2*len(key))
+	b.WriteString("k-")
+	for i := range len(key) {
+		c := key[i]
+		b.WriteByte(hexDigits[c>>4])
+		b.WriteByte(hexDigits[c&0xf])
+	}
+	return b.String()
 }
 
 // moods enumerates composed|worried|tense in stable order.
@@ -25,9 +33,9 @@ var moods = []string{"composed", "worried", "tense"}
 var genericStyles = []string{"dont_know", "mishear", "ack"}
 
 // Enumerate lists fragments in deterministic order: opening, sorted facts ×
-// sorted answer styles (+short/confirm defaults like scenario_from_snapshot),
-// GENERIC variants, SLOW_DOWN, URGE over critical slots (label from slots{}).
-func Enumerate(sc ScenarioSnapshot, slots map[string]string, generic map[string]map[string][]string, slowdown map[string]string, urge map[string]string) []Fragment {
+// explicitly nonempty answer styles, GENERIC variants, SLOW_DOWN, and URGE
+// over critical slots. Urge speech comes from urgeSlots, falling back to slots.
+func Enumerate(sc ScenarioSnapshot, slots, urgeSlots map[string]string, generic map[string]map[string][]string, slowdown map[string]string, urge map[string]string) []Fragment {
 	out := []Fragment{}
 	out = append(out, Fragment{ID: fmt.Sprintf("a/%s/opening.wav", sc.ID), Text: sc.Opening})
 
@@ -42,13 +50,9 @@ func Enumerate(sc ScenarioSnapshot, slots map[string]string, generic map[string]
 		f := byKey[key]
 		styles := map[string]string{}
 		for s, t := range f.Answers {
-			styles[s] = t
-		}
-		if _, ok := styles["short"]; !ok {
-			styles["short"] = f.Answers["plain"]
-		}
-		if _, ok := styles["confirm"]; !ok {
-			styles["confirm"] = "Да, всё верно."
+			if t != "" {
+				styles[s] = t
+			}
 		}
 		names := make([]string, 0, len(styles))
 		for s := range styles {
@@ -99,8 +103,14 @@ func Enumerate(sc ScenarioSnapshot, slots map[string]string, generic map[string]
 			continue
 		}
 		for _, slot := range slotIDs {
-			what, ok := slots[slot]
-			if !ok || strings.TrimSpace(what) == "" {
+			what, known := slots[slot]
+			if !known {
+				continue
+			}
+			if spoken := urgeSlots[slot]; spoken != "" {
+				what = spoken
+			}
+			if strings.TrimSpace(what) == "" {
 				continue
 			}
 			out = append(out, Fragment{

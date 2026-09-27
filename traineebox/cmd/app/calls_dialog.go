@@ -9,6 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"traineebox/internal/audio"
 	"traineebox/internal/auth/application"
 	callsapp "traineebox/internal/calls/application"
 	callserrs "traineebox/internal/calls/domain/errs"
@@ -23,11 +28,6 @@ import (
 	genworker "traineebox/internal/generation/worker"
 	ticketserrs "traineebox/internal/tickets/domain/errs"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
-
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func wireCallsAndDialog(
@@ -38,6 +38,7 @@ func wireCallsAndDialog(
 	attemptsRepo *ticketsinfra.AttemptRepository,
 	jobsRepo *geninfra.JobRepository,
 	catalogRepo repositories.Catalog,
+	audioClient audio.Client,
 ) {
 	dialogRepo := dialoginfra.NewBankRepository(pool)
 	callsRepo := callsinfra.NewCallRepository(pool)
@@ -84,10 +85,10 @@ func wireCallsAndDialog(
 			}
 			return tickets[0].ID, attempt.UserID, attempt.DeadlineAt, attempt.Status.String(), nil
 		},
-		LoadTicket: func(ctx context.Context, ticketID uuid.UUID) (string, string, string, error) {
+		LoadTicket: func(ctx context.Context, ticketID uuid.UUID) (callsapp.TicketSnapshot, error) {
 			ticket, err := ticketsRepo.FindByID(ctx, ticketID)
 			if err != nil {
-				return "", "", "", mapTicketsToCalls(err)
+				return callsapp.TicketSnapshot{}, mapTicketsToCalls(err)
 			}
 			scenarioID := ticket.ScenarioVersion
 			scenarioJSON := ticket.ScenarioJSON
@@ -104,12 +105,14 @@ func wireCallsAndDialog(
 			if scenarioID == "" {
 				scenarioID = ticket.ID.String()
 			}
-			digest := ""
-			if v, d, err := dialogRepo.BankVersion(ctx); err == nil {
-				_ = v
-				digest = d
+			_, bankDigest, err := dialogRepo.BankVersion(ctx)
+			if err != nil {
+				bankDigest = ""
 			}
-			return scenarioID, scenarioJSON, digest, nil
+			return callsapp.TicketSnapshot{
+				ScenarioID: scenarioID, ScenarioJSON: scenarioJSON, BankDigest: bankDigest,
+				AudioDigest: ticket.AudioDigest, AudioStatus: ticket.AudioStatus,
+			}, nil
 		},
 	}
 
@@ -135,21 +138,28 @@ func wireCallsAndDialog(
 		}
 	}
 	workers := dialoginfra.NewWorkerClient()
+	store := dialogScenarioStore{
+		save: func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version, digest, status string) error {
+			if err := ticketsRepo.UpdateDialogSnapshot(ctx, ticketID, scenarioJSON, version, digest, status); err != nil {
+				return mapTicketsToDialog(err)
+			}
+			return nil
+		},
+		update: func(ctx context.Context, ticketID uuid.UUID, digest, status string) (bool, error) {
+			updated, err := ticketsRepo.UpdateAudioStatus(ctx, ticketID, digest, status)
+			return updated, mapTicketsToDialog(err)
+		},
+	}
 	dialogAPI := dialogpresentation.NewAPI(dialogpresentation.Deps{
 		Put: dialogapp.PutScenario{
-			Bank: dialogRepo,
-			Store: dialogScenarioStore{save: func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error {
-				if err := ticketsRepo.UpdateDialogSnapshot(ctx, ticketID, scenarioJSON, version); err != nil {
-					return mapTicketsToDialog(err)
-				}
-				return nil
-			}},
+			Bank: dialogRepo, Store: store, Audio: audioClient,
 		},
 		Reload: dialogapp.ReloadBank{
 			Bank: dialogRepo, Workers: workers, URLs: dialogURLs, Token: serviceToken,
 		},
 		Version:      dialogapp.BankVersion{Bank: dialogRepo},
 		Lint:         dialogapp.LintScenario{Bank: dialogRepo, Workers: workers, URLs: dialogURLs, Token: serviceToken},
+		AudioStatus:  store,
 		ServiceToken: serviceToken,
 		ResolveActor: callsAPI.ResolveActor,
 	})
@@ -164,11 +174,16 @@ func wireCallsAndDialog(
 }
 
 type dialogScenarioStore struct {
-	save func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error
+	save   func(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version, digest, status string) error
+	update func(ctx context.Context, ticketID uuid.UUID, digest, status string) (bool, error)
 }
 
-func (s dialogScenarioStore) Save(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error {
-	return s.save(ctx, ticketID, scenarioJSON, version)
+func (s dialogScenarioStore) Save(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version, digest, status string) error {
+	return s.save(ctx, ticketID, scenarioJSON, version, digest, status)
+}
+
+func (s dialogScenarioStore) UpdateAudioStatus(ctx context.Context, ticketID uuid.UUID, digest, status string) (bool, error) {
+	return s.update(ctx, ticketID, digest, status)
 }
 
 func mapTicketsToCalls(err error) error {

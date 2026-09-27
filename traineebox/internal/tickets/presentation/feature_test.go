@@ -53,6 +53,15 @@ func TestStudentAttemptOnceThenTeacherGrantsRetry(t *testing.T) {
 	ticketA := createNamed(t, handler, ownerToken, "/variants/"+variantA+"/tickets", map[string]any{
 		"topic_id": topic, "title": "Ticket A", "body": "Call about fire",
 	})
+	getTicket := doRequest(t, handler, http.MethodGet, "/tickets/"+ticketA, ownerToken, nil)
+	mustOK(t, getTicket)
+	var ticketAudio struct {
+		AudioStatus string `json:"audio_status"`
+	}
+	mustDecode(t, getTicket.Body, &ticketAudio)
+	if ticketAudio.AudioStatus != "none" {
+		t.Fatalf("audio_status = %q, want none", ticketAudio.AudioStatus)
+	}
 	ticketB := createNamed(t, handler, ownerToken, "/variants/"+variantB+"/tickets", map[string]any{
 		"topic_id": topic, "title": "Ticket B", "body": "Another fire",
 	})

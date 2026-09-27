@@ -64,8 +64,8 @@ func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 func hexOf(sum [32]byte) string { return hex.EncodeToString(sum[:]) }
 
 // Ensure upserts the manifest + refs for existing blobs + queue for missing.
-// Idempotent: stored digest and voice match returns current status + missing
-// with no writes. matched reports the cache hit (caller maps ready→200).
+// Only an identical digest, voice, and fragment map is a cache hit: fragment
+// naming and rendered text can change without changing the scenario digest.
 func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice string, frags []domain.Fragment, hashes [][32]byte) (status string, missing []string, matched bool, err error) {
 	fragMap := make(map[string]string, len(frags))
 	newHashes := make([][]byte, len(hashes))
@@ -87,8 +87,9 @@ func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice st
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var storedDigest, storedStatus, storedVoice string
-	err = tx.QueryRow(ctx, `SELECT scenario_digest, status, voice FROM manifests WHERE ticket_id = $1`, ticketID).Scan(&storedDigest, &storedStatus, &storedVoice)
-	if err == nil && storedDigest == digest && storedVoice == voice {
+	var fragmentsMatch bool
+	err = tx.QueryRow(ctx, `SELECT scenario_digest, status, voice, fragments = $2::jsonb FROM manifests WHERE ticket_id = $1`, ticketID, rawFrag).Scan(&storedDigest, &storedStatus, &storedVoice, &fragmentsMatch)
+	if err == nil && storedDigest == digest && storedVoice == voice && fragmentsMatch {
 		m, err := s.missingLocked(ctx, tx, ticketID)
 		if err != nil {
 			return "", nil, false, err

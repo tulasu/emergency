@@ -32,13 +32,14 @@ type serviceDTO struct {
 }
 
 type ticketDTO struct {
-	ID        string `json:"id"`
-	VariantID string `json:"variant_id"`
-	TopicID   string `json:"topic_id"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	CreatedBy string `json:"created_by"`
-	CreatedAt string `json:"created_at"`
+	ID          string `json:"id"`
+	VariantID   string `json:"variant_id"`
+	TopicID     string `json:"topic_id"`
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	CreatedBy   string `json:"created_by"`
+	CreatedAt   string `json:"created_at"`
+	AudioStatus string `json:"audio_status"`
 }
 
 type answerDTO struct {
@@ -99,7 +100,7 @@ func toTicketDTO(t models.Ticket) ticketDTO {
 	return ticketDTO{
 		ID: t.ID.String(), VariantID: t.VariantID.String(), TopicID: t.TopicID.String(),
 		Title: t.Title.String(), Body: t.Body, CreatedBy: t.CreatedBy.String(),
-		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
+		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano), AudioStatus: t.AudioStatus,
 	}
 }
 

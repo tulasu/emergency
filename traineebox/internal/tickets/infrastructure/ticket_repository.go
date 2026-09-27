@@ -46,26 +46,35 @@ func (r *TicketRepository) Create(ctx context.Context, ticket models.Ticket) err
 }
 
 func (r *TicketRepository) FindByID(ctx context.Context, id uuid.UUID) (models.Ticket, error) {
-	row, err := r.q.GetTicketByID(ctx, id)
+	ticket, err := scanTicket(r.pool.QueryRow(ctx, `SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+		scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
+		FROM tickets WHERE id = $1`, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Ticket{}, errs.ErrNotFound
 		}
 		return models.Ticket{}, err
 	}
-	return mapTicket(row), nil
+	return ticket, nil
 }
 
 func (r *TicketRepository) ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Ticket, error) {
-	rows, err := r.q.ListTicketsByVariant(ctx, variantID)
+	rows, err := r.pool.Query(ctx, `SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+		scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
+		FROM tickets WHERE variant_id = $1 ORDER BY created_at`, variantID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]models.Ticket, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, mapTicket(row))
+	defer rows.Close()
+	var tickets []models.Ticket
+	for rows.Next() {
+		ticket, err := scanTicket(rows)
+		if err != nil {
+			return nil, err
+		}
+		tickets = append(tickets, ticket)
 	}
-	return out, nil
+	return tickets, rows.Err()
 }
 
 func (r *TicketRepository) Update(ctx context.Context, ticket models.Ticket) error {
@@ -78,21 +87,29 @@ func (r *TicketRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteTicket(ctx, id)
 }
 
-func (r *TicketRepository) UpdateDialogSnapshot(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error {
+func (r *TicketRepository) UpdateDialogSnapshot(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version, digest, status string) error {
 	scenario := validOrEmptyJSON(scenarioJSON)
 	if scenarioJSON != "" && scenario == "{}" {
 		return errs.ErrInvalidInput
 	}
-	n, err := r.q.UpdateDialogSnapshot(ctx, ticketssql.UpdateDialogSnapshotParams{
-		ID: ticketID, Scenario: []byte(scenario), ScenarioVersion: version,
-	})
+	result, err := r.pool.Exec(ctx, `UPDATE tickets
+		SET scenario = $2::jsonb, scenario_version = $3, audio_digest = $4, audio_status = $5
+		WHERE id = $1`, ticketID, []byte(scenario), version, digest, status)
 	if err != nil {
 		return err
 	}
-	if n == 0 {
+	if result.RowsAffected() == 0 {
 		return errs.ErrNotFound
 	}
 	return nil
+}
+
+func (r *TicketRepository) UpdateAudioStatus(ctx context.Context, ticketID uuid.UUID, digest, status string) (bool, error) {
+	result, err := r.pool.Exec(ctx, `UPDATE tickets SET audio_status = $3 WHERE id = $1 AND audio_digest = $2 AND (audio_status = 'pending' OR $3 = 'ready')`, ticketID, digest, status)
+	if err != nil {
+		return false, err
+	}
+	return result.RowsAffected() == 1, nil
 }
 
 func (r *TicketRepository) SaveReference(ctx context.Context, ref models.ReferenceAnswer) error {
@@ -171,21 +188,37 @@ func (r *TicketRepository) CreateWithReference(ctx context.Context, ticket model
 	return r.SaveReference(ctx, ref)
 }
 
-func mapTicket(row ticketssql.Ticket) models.Ticket {
-	return models.Ticket{
-		ID:              row.ID,
-		VariantID:       row.VariantID,
-		TopicID:         row.TopicID,
-		Title:           value_objects.TicketTitle(row.Title),
-		Body:            row.Body,
-		CreatedBy:       row.CreatedBy,
-		CreatedAt:       row.CreatedAt,
-		ScenarioJSON:    string(row.Scenario),
-		ScenarioVersion: row.ScenarioVersion,
-		Mode:            row.Mode,
-		Briefing:        row.Briefing,
-		Reference:       string(row.Reference),
+type ticketScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTicket(row ticketScanner) (models.Ticket, error) {
+	var ticket models.Ticket
+	var title string
+	var scenario, reference []byte
+	err := row.Scan(
+		&ticket.ID,
+		&ticket.VariantID,
+		&ticket.TopicID,
+		&title,
+		&ticket.Body,
+		&ticket.CreatedBy,
+		&ticket.CreatedAt,
+		&scenario,
+		&ticket.ScenarioVersion,
+		&ticket.AudioDigest,
+		&ticket.AudioStatus,
+		&reference,
+		&ticket.Mode,
+		&ticket.Briefing,
+	)
+	if err != nil {
+		return models.Ticket{}, err
 	}
+	ticket.Title = value_objects.TicketTitle(title)
+	ticket.ScenarioJSON = string(scenario)
+	ticket.Reference = string(reference)
+	return ticket, nil
 }
 
 func validOrEmptyJSON(s string) string {

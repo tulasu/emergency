@@ -39,7 +39,7 @@ class SileroTTS:
             self(text)
 
     def __call__(self, text: str) -> bytes:
-        from tools.synth_audio import speakable
+        from .speakable import speakable
 
         with self._lock, self._torch.inference_mode():
             audio = self._model.apply_tts(

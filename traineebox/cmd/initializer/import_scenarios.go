@@ -36,11 +36,12 @@ type scenarioQuestion struct {
 }
 
 func newImportScenariosCmd(cfg config.Config) *cobra.Command {
+	var prerender bool
 	cmd := &cobra.Command{
 		Use:   "import-scenarios",
 		Short: "Seed slot_questions from the scenario corpus",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			imported, scenarios, skipped, err := importScenarios(cmd.Context(), cfg.PostgresDSN)
+			imported, scenarios, skipped, err := importScenarios(cmd.Context(), cfg, prerender)
 			if err != nil {
 				return err
 			}
@@ -48,10 +49,11 @@ func newImportScenariosCmd(cfg config.Config) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&prerender, "prerender", true, "ensure audio for existing ticket snapshots after import")
 	return cmd
 }
 
-func importScenarios(ctx context.Context, dsn string) (imported, scenarios, skipped int, err error) {
+func importScenarios(ctx context.Context, cfg config.Config, prerender bool) (imported, scenarios, skipped int, err error) {
 	// bySlot keeps first-seen order per slot; seen dedups on the normalized form
 	// (mirrors loader.py: bucket.append(q) stores the raw text, norm only dedups).
 	bySlot := map[string][]scenarioQuestion{}
@@ -100,7 +102,7 @@ func importScenarios(ctx context.Context, dsn string) (imported, scenarios, skip
 		return 0, 0, 0, fmt.Errorf("no questions collected from corpus; refusing to seed")
 	}
 
-	pool, err := postgres.NewPool(ctx, dsn)
+	pool, err := postgres.NewPool(ctx, cfg.PostgresDSN)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -142,6 +144,15 @@ func importScenarios(ctx context.Context, dsn string) (imported, scenarios, skip
 
 	if err := tx.Commit(ctx); err != nil {
 		return 0, 0, 0, err
+	}
+	if prerender {
+		attempted, failed, err := backfillTicketAudio(ctx, pool, cfg)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		if attempted > 0 {
+			fmt.Printf("audio prerender: %d ticket snapshots, %d failed\n", attempted, failed)
+		}
 	}
 	return imported, scenarios, skipped, nil
 }

@@ -14,11 +14,13 @@ CREATE TABLE tickets (
     body TEXT NOT NULL,
     created_by UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    scenario JSONB NOT NULL,
-    scenario_version TEXT NOT NULL,
-    reference JSONB NOT NULL,
-    mode TEXT NOT NULL,
-    briefing TEXT NOT NULL
+	scenario JSONB NOT NULL,
+	scenario_version TEXT NOT NULL,
+	audio_digest TEXT NOT NULL DEFAULT '',
+	audio_status TEXT NOT NULL DEFAULT 'none',
+	reference JSONB NOT NULL,
+	mode TEXT NOT NULL,
+	briefing TEXT NOT NULL
 );
 
 CREATE TABLE ticket_reference_answers (

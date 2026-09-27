@@ -21,6 +21,13 @@ func Register(api huma.API, a *API) {
 		Tags:        []string{"Dialog"},
 	}, a.putScenario)
 	huma.Register(api, huma.Operation{
+		OperationID: "audio-ready",
+		Method:      http.MethodPost,
+		Path:        "/internal/audio/ready",
+		Summary:     "Mark the current ticket audio digest ready",
+		Tags:        []string{"Internal"},
+	}, a.audioReady)
+	huma.Register(api, huma.Operation{
 		OperationID: "bank-reload",
 		Method:      http.MethodPost,
 		Path:        "/bank/reload",
@@ -46,13 +53,21 @@ func Register(api huma.API, a *API) {
 type putScenarioIn struct {
 	TicketID      string `path:"ticketId"`
 	Authorization string `header:"Authorization"`
+	Prerender     string `query:"prerender"`
 	Body          struct {
 		Scenario json.RawMessage `json:"scenario"`
 		Version  string          `json:"version"`
 	} `json:"body"`
 }
 
-func (a *API) putScenario(ctx context.Context, in *putScenarioIn) (*struct{}, error) {
+type putScenarioOut struct {
+	Body struct {
+		OK          bool   `json:"ok"`
+		AudioStatus string `json:"audio_status"`
+	}
+}
+
+func (a *API) putScenario(ctx context.Context, in *putScenarioIn) (*putScenarioOut, error) {
 	if a.ResolveActor == nil {
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
@@ -63,7 +78,39 @@ func (a *API) putScenario(ctx context.Context, in *putScenarioIn) (*struct{}, er
 	if err != nil {
 		return nil, huma.Error400BadRequest("bad ticket id")
 	}
-	if err := a.put.Execute(ctx, ticketID, in.Body.Scenario, in.Body.Version); err != nil {
+	result, err := a.put.Execute(ctx, ticketID, in.Body.Scenario, in.Body.Version, in.Prerender != "0")
+	if err != nil {
+		return nil, mapDialogError(err)
+	}
+	out := &putScenarioOut{}
+	out.Body.OK = true
+	out.Body.AudioStatus = result.AudioStatus
+	return out, nil
+}
+
+type audioReadyIn struct {
+	ServiceToken string `header:"X-Service-Token"`
+	Body         struct {
+		TicketID       string `json:"ticket_id"`
+		ScenarioDigest string `json:"scenario_digest"`
+	} `json:"body"`
+}
+
+func (a *API) audioReady(ctx context.Context, in *audioReadyIn) (*struct{}, error) {
+	if a.token == "" || in.ServiceToken != a.token {
+		return nil, huma.Error401Unauthorized("unauthorized")
+	}
+	if a.audioStatus == nil {
+		return nil, huma.Error404NotFound("audio unavailable")
+	}
+	ticketID, err := uuid.Parse(in.Body.TicketID)
+	if err != nil {
+		return nil, huma.Error400BadRequest("bad ticket id")
+	}
+	if in.Body.ScenarioDigest == "" {
+		return nil, huma.Error400BadRequest("scenario digest required")
+	}
+	if _, err := a.audioStatus.UpdateAudioStatus(ctx, ticketID, in.Body.ScenarioDigest, "ready"); err != nil {
 		return nil, mapDialogError(err)
 	}
 	return &struct{}{}, nil

@@ -137,7 +137,8 @@ class H(BaseHTTPRequestHandler):
                 return
             try:
                 opening = open_session(b["session_id"], b.get("scenario", {}),
-                                         expected_digest=b.get("bank_digest", ""))
+                                       expected_digest=b.get("bank_digest", ""),
+                                       audio=b.get("audio"))
             except KeyError as e:  # duplicate open → 409, not 404
                 self._send({"error": str(e)}, 409)
                 return

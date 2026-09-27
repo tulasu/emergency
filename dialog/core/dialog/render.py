@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 
 from ..data.ontology import Ontology
+from ..media.fragids import fskey
 from ..types import Decision, Mood, Reply, Scenario, Style
 
 # Реплики, не привязанные к факту. Индекс — настроение.
@@ -74,10 +75,9 @@ class Renderer:
         else:
             for key in d.reveal:
                 fact = self.sc.facts[key]
+                used_style = d.style if fact.answers.get(d.style.value) else Style.PLAIN
                 parts.append(fact.answer(d.style))
-                hit = fact.audio.get(d.style.value) or fact.audio.get("plain")
-                if hit:
-                    ids.append(hit)
+                ids.append(f"a/{self.sc.id}/{fskey(key)}/{used_style.value}.wav")
             if d.style is Style.SLOW_DOWN:
                 parts.append(SLOW_DOWN[d.mood])
                 ids.append(f"common/slow_down/{d.mood.name.lower()}.wav")

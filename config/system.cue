@@ -53,6 +53,9 @@ import "strings"
 		rate:  *8000 | int
 		synth_device: *"cuda" | string
 		sweep_minutes: *10 | int
+		traineebox_audio_url: *"http://audio:8002" | string
+		dialog_audio_url: *"http://127.0.0.1:8002" | string
+		traineebox_url: *"http://traineebox:8080" | string
 	}
 }
 
@@ -162,6 +165,7 @@ compose: {
 				TRAINEEBOX_POSTGRES_DSN: "postgres://\(config.postgres.user):\(config.postgres.password)@postgres:5432/\(config.postgres.database)?sslmode=disable"
 				TRAINEEBOX_CATALOG_PATH: "/catalog"
 				INTERNAL_SERVICE_TOKEN:  config.service_token
+				AUDIO_URL:              config.audio.traineebox_audio_url
 				DIALOG_URL:              "http://dialog:8000"
 				// AudioSocket в dialplan trainer-out ждёт именно dialog:9001
 				// (Asterisk видит dialog через extra_hosts: dialog:host-gateway).
@@ -191,6 +195,9 @@ compose: {
 				DIALOG_AUDIOSOCKET:     "0.0.0.0:9001"
 				DIALOG_DEVICE:          config.dialog.device
 				DIALOG_PROD:            "1"
+				AUDIO_URL:              config.audio.dialog_audio_url
+				AUDIO_CACHE_DIR:         "/tmp/dialog-audio"
+				AUDIO_CACHE_MB:          "500"
 				// llama слушает на хосте (ports 8081:8081), dialog в host net
 				// видит его на 127.0.0.1:8081.
 				DISPATCHER_LLM_URL:     "http://127.0.0.1:8081"
@@ -290,6 +297,7 @@ compose: {
 				AUDIO_RATE:            "\(config.audio.rate)"
 				AUDIO_SYNTH_URL:       "http://audio-synth:8003"
 				AUDIO_SWEEP_MINUTES:   "\(config.audio.sweep_minutes)m"
+				TRAINEEBOX_URL:         config.audio.traineebox_url
 				INTERNAL_SERVICE_TOKEN: config.service_token
 			}
 			restart: "unless-stopped"

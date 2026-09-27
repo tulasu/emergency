@@ -3,6 +3,7 @@ package repositories_test
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -113,6 +114,20 @@ func TestEnsureFinishDeleteRefcount(t *testing.T) {
 	}
 	if _, _, matched, err := st.Ensure(ctx, ticket, "d1", "kseniya", frags, sums); err != nil || !matched {
 		t.Fatalf("digest match = %v %v", matched, err)
+	}
+	// A deployment can change fragment IDs while keeping the scenario digest.
+	// Re-ensure must replace the manifest even when every blob is reusable.
+	frags[1].ID = "a/t/k-78/plain.wav"
+	status, missing, matched, err = st.Ensure(ctx, ticket, "d1", "kseniya", frags, sums)
+	if err != nil || matched || status != "ready" || len(missing) != 0 {
+		t.Fatalf("fragment refresh = %s %v matched=%v err=%v", status, missing, matched, err)
+	}
+	m, err = st.GetManifest(ctx, ticket)
+	if err != nil || m.Fragments[frags[1].ID] != hex.EncodeToString(sums[1][:]) {
+		t.Fatalf("refreshed manifest = %+v, err=%v", m, err)
+	}
+	if _, old := m.Fragments["a/t/x/plain.wav"]; old {
+		t.Fatalf("obsolete fragment ID remained in manifest: %+v", m.Fragments)
 	}
 	n, err := st.DeleteTicket(ctx, ticket)
 	if err != nil || n != 2 {

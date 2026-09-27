@@ -10,27 +10,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createAttempt = `-- name: CreateAttempt :exec
 INSERT INTO ticket_attempts (
     id, variant_id, user_id, granted_by, attempt_no, status,
-    started_at, deadline_at, finished_at, score, report
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    available_from, started_at, deadline_at, finished_at, score, report
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type CreateAttemptParams struct {
-	ID         uuid.UUID
-	VariantID  uuid.UUID
-	UserID     uuid.UUID
-	GrantedBy  uuid.UUID
-	AttemptNo  int32
-	Status     string
-	StartedAt  *time.Time
-	DeadlineAt *time.Time
-	FinishedAt *time.Time
-	Score      *int16
-	Report     []byte
+	ID            uuid.UUID
+	VariantID     uuid.UUID
+	UserID        uuid.UUID
+	GrantedBy     uuid.UUID
+	AttemptNo     int32
+	Status        string
+	AvailableFrom *time.Time
+	StartedAt     *time.Time
+	DeadlineAt    *time.Time
+	FinishedAt    *time.Time
+	Score         *int16
+	Report        []byte
 }
 
 func (q *Queries) CreateAttempt(ctx context.Context, arg CreateAttemptParams) error {
@@ -41,6 +43,7 @@ func (q *Queries) CreateAttempt(ctx context.Context, arg CreateAttemptParams) er
 		arg.GrantedBy,
 		arg.AttemptNo,
 		arg.Status,
+		arg.AvailableFrom,
 		arg.StartedAt,
 		arg.DeadlineAt,
 		arg.FinishedAt,
@@ -61,7 +64,7 @@ INSERT INTO tickets (
 
 type CreateTicketParams struct {
 	ID              uuid.UUID
-	VariantID       uuid.UUID
+	VariantID       *uuid.UUID
 	TopicID         uuid.UUID
 	Title           string
 	Body            string
@@ -147,7 +150,7 @@ func (q *Queries) DeleteTicket(ctx context.Context, id uuid.UUID) error {
 
 const findOpenAttempt = `-- name: FindOpenAttempt :one
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE variant_id = $1 AND user_id = $2 AND status IN ('available', 'in_progress')
 `
@@ -167,6 +170,7 @@ func (q *Queries) FindOpenAttempt(ctx context.Context, arg FindOpenAttemptParams
 		&i.GrantedBy,
 		&i.AttemptNo,
 		&i.Status,
+		&i.AvailableFrom,
 		&i.StartedAt,
 		&i.DeadlineAt,
 		&i.FinishedAt,
@@ -207,7 +211,7 @@ func (q *Queries) GetAttemptAnswer(ctx context.Context, arg GetAttemptAnswerPara
 
 const getAttemptByID = `-- name: GetAttemptByID :one
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE id = $1
 `
@@ -222,6 +226,7 @@ func (q *Queries) GetAttemptByID(ctx context.Context, id uuid.UUID) (TicketAttem
 		&i.GrantedBy,
 		&i.AttemptNo,
 		&i.Status,
+		&i.AvailableFrom,
 		&i.StartedAt,
 		&i.DeadlineAt,
 		&i.FinishedAt,
@@ -272,7 +277,7 @@ func (q *Queries) GetReferenceAnswer(ctx context.Context, ticketID uuid.UUID) (T
 
 const getTicketByID = `-- name: GetTicketByID :one
 SELECT id, variant_id, topic_id, title, body, created_by, created_at,
-       scenario, scenario_version, reference, mode, briefing
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
 FROM tickets
 WHERE id = $1
 `
@@ -290,6 +295,8 @@ func (q *Queries) GetTicketByID(ctx context.Context, id uuid.UUID) (Ticket, erro
 		&i.CreatedAt,
 		&i.Scenario,
 		&i.ScenarioVersion,
+		&i.AudioDigest,
+		&i.AudioStatus,
 		&i.Reference,
 		&i.Mode,
 		&i.Briefing,
@@ -470,7 +477,7 @@ func (q *Queries) ListAttemptAnswers(ctx context.Context, attemptID uuid.UUID) (
 
 const listAttemptsByUser = `-- name: ListAttemptsByUser :many
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE user_id = $1
 ORDER BY attempt_no
@@ -492,6 +499,7 @@ func (q *Queries) ListAttemptsByUser(ctx context.Context, userID uuid.UUID) ([]T
 			&i.GrantedBy,
 			&i.AttemptNo,
 			&i.Status,
+			&i.AvailableFrom,
 			&i.StartedAt,
 			&i.DeadlineAt,
 			&i.FinishedAt,
@@ -510,7 +518,7 @@ func (q *Queries) ListAttemptsByUser(ctx context.Context, userID uuid.UUID) ([]T
 
 const listAttemptsByVariantUser = `-- name: ListAttemptsByVariantUser :many
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE variant_id = $1 AND user_id = $2
 ORDER BY attempt_no
@@ -537,11 +545,56 @@ func (q *Queries) ListAttemptsByVariantUser(ctx context.Context, arg ListAttempt
 			&i.GrantedBy,
 			&i.AttemptNo,
 			&i.Status,
+			&i.AvailableFrom,
 			&i.StartedAt,
 			&i.DeadlineAt,
 			&i.FinishedAt,
 			&i.Score,
 			&i.Report,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryTickets = `-- name: ListLibraryTickets :many
+SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
+FROM tickets
+WHERE variant_id IS NULL
+AND ($1::text IS NULL OR $1::text = '' OR title ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListLibraryTickets(ctx context.Context, q_ pgtype.Text) ([]Ticket, error) {
+	rows, err := q.db.Query(ctx, listLibraryTickets, q_)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Ticket{}
+	for rows.Next() {
+		var i Ticket
+		if err := rows.Scan(
+			&i.ID,
+			&i.VariantID,
+			&i.TopicID,
+			&i.Title,
+			&i.Body,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.Scenario,
+			&i.ScenarioVersion,
+			&i.AudioDigest,
+			&i.AudioStatus,
+			&i.Reference,
+			&i.Mode,
+			&i.Briefing,
 		); err != nil {
 			return nil, err
 		}
@@ -603,13 +656,13 @@ func (q *Queries) ListReferenceAnswerTags(ctx context.Context, ticketID uuid.UUI
 
 const listTicketsByVariant = `-- name: ListTicketsByVariant :many
 SELECT id, variant_id, topic_id, title, body, created_by, created_at,
-       scenario, scenario_version, reference, mode, briefing
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
 FROM tickets
 WHERE variant_id = $1
 ORDER BY created_at
 `
 
-func (q *Queries) ListTicketsByVariant(ctx context.Context, variantID uuid.UUID) ([]Ticket, error) {
+func (q *Queries) ListTicketsByVariant(ctx context.Context, variantID *uuid.UUID) ([]Ticket, error) {
 	rows, err := q.db.Query(ctx, listTicketsByVariant, variantID)
 	if err != nil {
 		return nil, err
@@ -628,6 +681,8 @@ func (q *Queries) ListTicketsByVariant(ctx context.Context, variantID uuid.UUID)
 			&i.CreatedAt,
 			&i.Scenario,
 			&i.ScenarioVersion,
+			&i.AudioDigest,
+			&i.AudioStatus,
 			&i.Reference,
 			&i.Mode,
 			&i.Briefing,
@@ -690,17 +745,27 @@ func (q *Queries) UpdateAttempt(ctx context.Context, arg UpdateAttemptParams) er
 }
 
 const updateDialogSnapshot = `-- name: UpdateDialogSnapshot :execrows
-UPDATE tickets SET scenario = $2, scenario_version = $3 WHERE id = $1
+UPDATE tickets
+SET scenario = $2, scenario_version = $3, audio_digest = $4, audio_status = $5
+WHERE id = $1
 `
 
 type UpdateDialogSnapshotParams struct {
 	ID              uuid.UUID
 	Scenario        []byte
 	ScenarioVersion string
+	AudioDigest     string
+	AudioStatus     string
 }
 
 func (q *Queries) UpdateDialogSnapshot(ctx context.Context, arg UpdateDialogSnapshotParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateDialogSnapshot, arg.ID, arg.Scenario, arg.ScenarioVersion)
+	result, err := q.db.Exec(ctx, updateDialogSnapshot,
+		arg.ID,
+		arg.Scenario,
+		arg.ScenarioVersion,
+		arg.AudioDigest,
+		arg.AudioStatus,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -726,6 +791,24 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) erro
 		arg.TopicID,
 	)
 	return err
+}
+
+const updateTicketAudioStatus = `-- name: UpdateTicketAudioStatus :execrows
+UPDATE tickets SET audio_status = $3 WHERE id = $1 AND audio_digest = $2 AND (audio_status = 'pending' OR $3 = 'ready')
+`
+
+type UpdateTicketAudioStatusParams struct {
+	ID          uuid.UUID
+	AudioDigest string
+	AudioStatus string
+}
+
+func (q *Queries) UpdateTicketAudioStatus(ctx context.Context, arg UpdateTicketAudioStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateTicketAudioStatus, arg.ID, arg.AudioDigest, arg.AudioStatus)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertAttemptAnswer = `-- name: UpsertAttemptAnswer :exec

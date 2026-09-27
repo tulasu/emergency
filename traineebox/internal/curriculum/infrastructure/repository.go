@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -134,8 +135,17 @@ func (s *Store) DeleteAttachment(ctx context.Context, id uuid.UUID) error {
 func (s *Store) CreateModule(ctx context.Context, module models.Module) error {
 	return s.q.CreateModule(ctx, curriculumsql.CreateModuleParams{
 		ID: module.ID, Title: module.Title.String(), Description: module.Description,
+		Status: module.Status.String(), SuccessThreshold: int32(module.SuccessThreshold),
 		CreatedBy: module.CreatedBy, CreatedAt: module.CreatedAt,
 	})
+}
+
+func mapModule(row curriculumsql.Module) models.Module {
+	return models.Module{
+		ID: row.ID, Title: value_objects.Title(row.Title), Description: row.Description,
+		Status: value_objects.ModuleStatus(row.Status), SuccessThreshold: int(row.SuccessThreshold),
+		CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt,
+	}
 }
 
 func (s *Store) FindModuleByID(ctx context.Context, id uuid.UUID) (models.Module, error) {
@@ -143,7 +153,7 @@ func (s *Store) FindModuleByID(ctx context.Context, id uuid.UUID) (models.Module
 	if err != nil {
 		return models.Module{}, mapNotFound(err)
 	}
-	return models.Module{ID: row.ID, Title: value_objects.Title(row.Title), Description: row.Description, CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt}, nil
+	return mapModule(row), nil
 }
 
 func (s *Store) ListModules(ctx context.Context) ([]models.Module, error) {
@@ -153,14 +163,34 @@ func (s *Store) ListModules(ctx context.Context) ([]models.Module, error) {
 	}
 	out := make([]models.Module, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, models.Module{ID: row.ID, Title: value_objects.Title(row.Title), Description: row.Description, CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt})
+		out = append(out, mapModule(row))
 	}
 	return out, nil
+}
+
+func (s *Store) ListModulesFiltered(ctx context.Context, q, scope string, actorID uuid.UUID) ([]models.Module, error) {
+	rows, err := s.q.ListModulesFiltered(ctx, curriculumsql.ListModulesFilteredParams{
+		Q: textArg(q), Scope: textArg(scope), ActorID: uuidArg(actorID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.Module, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapModule(row))
+	}
+	return out, nil
+}
+
+func (s *Store) CountLessonsByModule(ctx context.Context, moduleID uuid.UUID) (int, error) {
+	n, err := s.q.CountLessonsByModule(ctx, moduleID)
+	return int(n), err
 }
 
 func (s *Store) UpdateModule(ctx context.Context, module models.Module) error {
 	return s.q.UpdateModule(ctx, curriculumsql.UpdateModuleParams{
 		ID: module.ID, Title: module.Title.String(), Description: module.Description,
+		Status: module.Status.String(), SuccessThreshold: int32(module.SuccessThreshold),
 	})
 }
 
@@ -171,7 +201,8 @@ func (s *Store) DeleteModule(ctx context.Context, id uuid.UUID) error {
 func (s *Store) CreateLesson(ctx context.Context, lesson models.Lesson) error {
 	return s.q.CreateLesson(ctx, curriculumsql.CreateLessonParams{
 		ID: lesson.ID, ModuleID: lesson.ModuleID, Title: lesson.Title.String(),
-		Position: int32(lesson.Position), DurationSeconds: intPtrToInt32(lesson.DurationSeconds), CreatedAt: lesson.CreatedAt,
+		Position: int32(lesson.Position), DurationSeconds: intPtrToInt32(lesson.DurationSeconds),
+		ArchivedAt: lesson.ArchivedAt, CreatedAt: lesson.CreatedAt,
 	})
 }
 
@@ -195,6 +226,28 @@ func (s *Store) ListLessonsByModule(ctx context.Context, moduleID uuid.UUID) ([]
 	return out, nil
 }
 
+func (s *Store) ListLessonsPool(ctx context.Context, q string) ([]models.Lesson, error) {
+	rows, err := s.q.ListLessonsPool(ctx, textArg(q))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.Lesson, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapLesson(row))
+	}
+	return out, nil
+}
+
+func (s *Store) CountVariantsByLesson(ctx context.Context, lessonID uuid.UUID) (int, error) {
+	n, err := s.q.CountVariantsByLesson(ctx, lessonID)
+	return int(n), err
+}
+
+func (s *Store) CountTicketsByLesson(ctx context.Context, lessonID uuid.UUID) (int, error) {
+	n, err := s.q.CountTicketsByLesson(ctx, lessonID)
+	return int(n), err
+}
+
 func (s *Store) FindLessonByVariant(ctx context.Context, variantID uuid.UUID) (models.Lesson, error) {
 	row, err := s.q.GetLessonByVariant(ctx, variantID)
 	if err != nil {
@@ -206,7 +259,7 @@ func (s *Store) FindLessonByVariant(ctx context.Context, variantID uuid.UUID) (m
 func (s *Store) UpdateLesson(ctx context.Context, lesson models.Lesson) error {
 	return s.q.UpdateLesson(ctx, curriculumsql.UpdateLessonParams{
 		ID: lesson.ID, Title: lesson.Title.String(), Position: int32(lesson.Position),
-		DurationSeconds: intPtrToInt32(lesson.DurationSeconds),
+		DurationSeconds: intPtrToInt32(lesson.DurationSeconds), ArchivedAt: lesson.ArchivedAt,
 	})
 }
 
@@ -217,8 +270,17 @@ func (s *Store) DeleteLesson(ctx context.Context, id uuid.UUID) error {
 func (s *Store) CreateVariant(ctx context.Context, variant models.Variant) error {
 	return s.q.CreateVariant(ctx, curriculumsql.CreateVariantParams{
 		ID: variant.ID, LessonID: variant.LessonID, Title: variant.Title.String(),
-		Position: int32(variant.Position), CreatedAt: variant.CreatedAt,
+		Position: int32(variant.Position), Status: variant.Status.String(), IsPrimary: variant.IsPrimary,
+		CreatedAt: variant.CreatedAt,
 	})
+}
+
+func mapVariant(row curriculumsql.Variant) models.Variant {
+	return models.Variant{
+		ID: row.ID, LessonID: row.LessonID, Title: value_objects.Title(row.Title),
+		Position: int(row.Position), Status: value_objects.VariantStatus(row.Status),
+		IsPrimary: row.IsPrimary, CreatedAt: row.CreatedAt,
+	}
 }
 
 func (s *Store) FindVariantByID(ctx context.Context, id uuid.UUID) (models.Variant, error) {
@@ -226,7 +288,7 @@ func (s *Store) FindVariantByID(ctx context.Context, id uuid.UUID) (models.Varia
 	if err != nil {
 		return models.Variant{}, mapNotFound(err)
 	}
-	return models.Variant{ID: row.ID, LessonID: row.LessonID, Title: value_objects.Title(row.Title), Position: int(row.Position), CreatedAt: row.CreatedAt}, nil
+	return mapVariant(row), nil
 }
 
 func (s *Store) ListVariantsByLesson(ctx context.Context, lessonID uuid.UUID) ([]models.Variant, error) {
@@ -236,14 +298,19 @@ func (s *Store) ListVariantsByLesson(ctx context.Context, lessonID uuid.UUID) ([
 	}
 	out := make([]models.Variant, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, models.Variant{ID: row.ID, LessonID: row.LessonID, Title: value_objects.Title(row.Title), Position: int(row.Position), CreatedAt: row.CreatedAt})
+		out = append(out, mapVariant(row))
 	}
 	return out, nil
+}
+
+func (s *Store) ClearPrimaryVariants(ctx context.Context, lessonID uuid.UUID) error {
+	return s.q.ClearPrimaryVariants(ctx, lessonID)
 }
 
 func (s *Store) UpdateVariant(ctx context.Context, variant models.Variant) error {
 	return s.q.UpdateVariant(ctx, curriculumsql.UpdateVariantParams{
 		ID: variant.ID, Title: variant.Title.String(), Position: int32(variant.Position),
+		Status: variant.Status.String(), IsPrimary: variant.IsPrimary,
 	})
 }
 
@@ -288,6 +355,38 @@ func (s *Store) HasAssignment(ctx context.Context, userID, moduleID uuid.UUID) (
 	return s.q.HasUserModule(ctx, curriculumsql.HasUserModuleParams{UserID: userID, ModuleID: moduleID})
 }
 
+func (s *Store) ListUserIDsByModule(ctx context.Context, moduleID uuid.UUID) ([]uuid.UUID, error) {
+	return s.q.ListUserIDsByModule(ctx, moduleID)
+}
+
+func (s *Store) CountModuleAssignmentBreakdown(ctx context.Context, moduleID uuid.UUID) (groups int, users int, err error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT source_group_id
+		FROM user_modules
+		WHERE module_id = $1
+	`, moduleID)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	seenGroups := map[uuid.UUID]struct{}{}
+	for rows.Next() {
+		var groupID *uuid.UUID
+		if err := rows.Scan(&groupID); err != nil {
+			return 0, 0, err
+		}
+		if groupID == nil {
+			users++
+			continue
+		}
+		if _, ok := seenGroups[*groupID]; !ok {
+			seenGroups[*groupID] = struct{}{}
+			groups++
+		}
+	}
+	return groups, users, rows.Err()
+}
+
 func (s *Store) UserHasTopic(ctx context.Context, userID, topicID uuid.UUID) (bool, error) {
 	ids, err := s.q.ListTopicIDsForUser(ctx, userID)
 	if err != nil {
@@ -311,8 +410,20 @@ func mapArticle(row curriculumsql.TopicArticle) models.Article {
 func mapLesson(row curriculumsql.Lesson) models.Lesson {
 	return models.Lesson{
 		ID: row.ID, ModuleID: row.ModuleID, Title: value_objects.Title(row.Title),
-		Position: int(row.Position), DurationSeconds: int32PtrToInt(row.DurationSeconds), CreatedAt: row.CreatedAt,
+		Position: int(row.Position), DurationSeconds: int32PtrToInt(row.DurationSeconds),
+		ArchivedAt: row.ArchivedAt, CreatedAt: row.CreatedAt,
 	}
+}
+
+func textArg(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: s, Valid: true}
+}
+
+func uuidArg(id uuid.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
 func mapNotFound(err error) error {

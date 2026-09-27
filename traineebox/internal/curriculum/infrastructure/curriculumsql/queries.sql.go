@@ -10,7 +10,53 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const clearPrimaryVariants = `-- name: ClearPrimaryVariants :exec
+UPDATE variants SET is_primary = false WHERE lesson_id = $1
+`
+
+func (q *Queries) ClearPrimaryVariants(ctx context.Context, lessonID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearPrimaryVariants, lessonID)
+	return err
+}
+
+const countLessonsByModule = `-- name: CountLessonsByModule :one
+SELECT COUNT(*)::int AS count FROM lessons WHERE module_id = $1 AND archived_at IS NULL
+`
+
+func (q *Queries) CountLessonsByModule(ctx context.Context, moduleID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countLessonsByModule, moduleID)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTicketsByLesson = `-- name: CountTicketsByLesson :one
+SELECT COUNT(*)::int AS count
+FROM tickets t
+JOIN variants v ON v.id = t.variant_id
+WHERE v.lesson_id = $1
+`
+
+func (q *Queries) CountTicketsByLesson(ctx context.Context, lessonID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countTicketsByLesson, lessonID)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countVariantsByLesson = `-- name: CountVariantsByLesson :one
+SELECT COUNT(*)::int AS count FROM variants WHERE lesson_id = $1
+`
+
+func (q *Queries) CountVariantsByLesson(ctx context.Context, lessonID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countVariantsByLesson, lessonID)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createArticle = `-- name: CreateArticle :exec
 INSERT INTO topic_articles (id, topic_id, title, body_md, created_by, created_at, updated_at)
@@ -69,8 +115,8 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 }
 
 const createLesson = `-- name: CreateLesson :exec
-INSERT INTO lessons (id, module_id, title, position, duration_seconds, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO lessons (id, module_id, title, position, duration_seconds, archived_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateLessonParams struct {
@@ -79,6 +125,7 @@ type CreateLessonParams struct {
 	Title           string
 	Position        int32
 	DurationSeconds *int32
+	ArchivedAt      *time.Time
 	CreatedAt       time.Time
 }
 
@@ -89,22 +136,25 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) erro
 		arg.Title,
 		arg.Position,
 		arg.DurationSeconds,
+		arg.ArchivedAt,
 		arg.CreatedAt,
 	)
 	return err
 }
 
 const createModule = `-- name: CreateModule :exec
-INSERT INTO modules (id, title, description, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO modules (id, title, description, status, success_threshold, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateModuleParams struct {
-	ID          uuid.UUID
-	Title       string
-	Description string
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
+	ID               uuid.UUID
+	Title            string
+	Description      string
+	Status           string
+	SuccessThreshold int32
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
 }
 
 func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) error {
@@ -112,6 +162,8 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) erro
 		arg.ID,
 		arg.Title,
 		arg.Description,
+		arg.Status,
+		arg.SuccessThreshold,
 		arg.CreatedBy,
 		arg.CreatedAt,
 	)
@@ -141,8 +193,8 @@ func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) error 
 }
 
 const createVariant = `-- name: CreateVariant :exec
-INSERT INTO variants (id, lesson_id, title, position, created_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO variants (id, lesson_id, title, position, status, is_primary, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateVariantParams struct {
@@ -150,6 +202,8 @@ type CreateVariantParams struct {
 	LessonID  uuid.UUID
 	Title     string
 	Position  int32
+	Status    string
+	IsPrimary bool
 	CreatedAt time.Time
 }
 
@@ -159,6 +213,8 @@ func (q *Queries) CreateVariant(ctx context.Context, arg CreateVariantParams) er
 		arg.LessonID,
 		arg.Title,
 		arg.Position,
+		arg.Status,
+		arg.IsPrimary,
 		arg.CreatedAt,
 	)
 	return err
@@ -261,7 +317,7 @@ func (q *Queries) GetAttachmentByID(ctx context.Context, id uuid.UUID) (ArticleA
 }
 
 const getLessonByID = `-- name: GetLessonByID :one
-SELECT id, module_id, title, position, duration_seconds, created_at
+SELECT id, module_id, title, position, duration_seconds, archived_at, created_at
 FROM lessons
 WHERE id = $1
 `
@@ -275,13 +331,14 @@ func (q *Queries) GetLessonByID(ctx context.Context, id uuid.UUID) (Lesson, erro
 		&i.Title,
 		&i.Position,
 		&i.DurationSeconds,
+		&i.ArchivedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getLessonByVariant = `-- name: GetLessonByVariant :one
-SELECT l.id, l.module_id, l.title, l.position, l.duration_seconds, l.created_at
+SELECT l.id, l.module_id, l.title, l.position, l.duration_seconds, l.archived_at, l.created_at
 FROM lessons l
 JOIN variants v ON v.lesson_id = l.id
 WHERE v.id = $1
@@ -296,13 +353,14 @@ func (q *Queries) GetLessonByVariant(ctx context.Context, id uuid.UUID) (Lesson,
 		&i.Title,
 		&i.Position,
 		&i.DurationSeconds,
+		&i.ArchivedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getModuleByID = `-- name: GetModuleByID :one
-SELECT id, title, description, created_by, created_at
+SELECT id, title, description, status, success_threshold, created_by, created_at
 FROM modules
 WHERE id = $1
 `
@@ -314,6 +372,8 @@ func (q *Queries) GetModuleByID(ctx context.Context, id uuid.UUID) (Module, erro
 		&i.ID,
 		&i.Title,
 		&i.Description,
+		&i.Status,
+		&i.SuccessThreshold,
 		&i.CreatedBy,
 		&i.CreatedAt,
 	)
@@ -363,7 +423,7 @@ func (q *Queries) GetUserModule(ctx context.Context, arg GetUserModuleParams) (U
 }
 
 const getVariantByID = `-- name: GetVariantByID :one
-SELECT id, lesson_id, title, position, created_at
+SELECT id, lesson_id, title, position, status, is_primary, created_at
 FROM variants
 WHERE id = $1
 `
@@ -376,6 +436,8 @@ func (q *Queries) GetVariantByID(ctx context.Context, id uuid.UUID) (Variant, er
 		&i.LessonID,
 		&i.Title,
 		&i.Position,
+		&i.Status,
+		&i.IsPrimary,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -470,9 +532,9 @@ func (q *Queries) ListAttachmentsByArticle(ctx context.Context, articleID uuid.U
 }
 
 const listLessonsByModule = `-- name: ListLessonsByModule :many
-SELECT id, module_id, title, position, duration_seconds, created_at
+SELECT id, module_id, title, position, duration_seconds, archived_at, created_at
 FROM lessons
-WHERE module_id = $1
+WHERE module_id = $1 AND archived_at IS NULL
 ORDER BY position, created_at
 `
 
@@ -491,6 +553,43 @@ func (q *Queries) ListLessonsByModule(ctx context.Context, moduleID uuid.UUID) (
 			&i.Title,
 			&i.Position,
 			&i.DurationSeconds,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonsPool = `-- name: ListLessonsPool :many
+SELECT id, module_id, title, position, duration_seconds, archived_at, created_at
+FROM lessons
+WHERE archived_at IS NULL
+AND ($1::text IS NULL OR $1::text = '' OR title ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListLessonsPool(ctx context.Context, q_ pgtype.Text) ([]Lesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsPool, q_)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Lesson{}
+	for rows.Next() {
+		var i Lesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.ModuleID,
+			&i.Title,
+			&i.Position,
+			&i.DurationSeconds,
+			&i.ArchivedAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -504,9 +603,9 @@ func (q *Queries) ListLessonsByModule(ctx context.Context, moduleID uuid.UUID) (
 }
 
 const listModules = `-- name: ListModules :many
-SELECT id, title, description, created_by, created_at
+SELECT id, title, description, status, success_threshold, created_by, created_at
 FROM modules
-ORDER BY created_at
+ORDER BY created_at DESC
 `
 
 func (q *Queries) ListModules(ctx context.Context) ([]Module, error) {
@@ -522,6 +621,61 @@ func (q *Queries) ListModules(ctx context.Context) ([]Module, error) {
 			&i.ID,
 			&i.Title,
 			&i.Description,
+			&i.Status,
+			&i.SuccessThreshold,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listModulesFiltered = `-- name: ListModulesFiltered :many
+SELECT id, title, description, status, success_threshold, created_by, created_at
+FROM modules
+WHERE (
+    $1::text IS NULL OR $1::text = ''
+    OR title ILIKE '%' || $1::text || '%'
+    OR description ILIKE '%' || $1::text || '%'
+)
+AND (
+    $2::text IS NULL OR $2::text = '' OR $2::text = 'all'
+    OR ($2::text = 'active' AND status = 'active')
+    OR ($2::text = 'draft' AND status = 'draft')
+    OR ($2::text = 'archived' AND status = 'archived')
+    OR ($2::text = 'mine' AND created_by = $3::uuid)
+    OR ($2::text = 'team' AND created_by <> $3::uuid AND status <> 'archived')
+)
+ORDER BY created_at DESC
+`
+
+type ListModulesFilteredParams struct {
+	Q       pgtype.Text
+	Scope   pgtype.Text
+	ActorID pgtype.UUID
+}
+
+func (q *Queries) ListModulesFiltered(ctx context.Context, arg ListModulesFilteredParams) ([]Module, error) {
+	rows, err := q.db.Query(ctx, listModulesFiltered, arg.Q, arg.Scope, arg.ActorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Module{}
+	for rows.Next() {
+		var i Module
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.SuccessThreshold,
 			&i.CreatedBy,
 			&i.CreatedAt,
 		); err != nil {
@@ -539,7 +693,7 @@ const listTopicIDsForUser = `-- name: ListTopicIDsForUser :many
 SELECT DISTINCT t.topic_id
 FROM tickets t
 JOIN ticket_attempts a ON a.variant_id = t.variant_id
-WHERE a.user_id = $1
+WHERE a.user_id = $1 AND t.variant_id IS NOT NULL
 `
 
 func (q *Queries) ListTopicIDsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
@@ -650,8 +804,40 @@ func (q *Queries) ListUserModules(ctx context.Context, userID uuid.UUID) ([]User
 	return items, nil
 }
 
+const listUserModulesByModule = `-- name: ListUserModulesByModule :many
+SELECT user_id, module_id, assigned_by, source_group_id, assigned_at
+FROM user_modules
+WHERE module_id = $1
+`
+
+func (q *Queries) ListUserModulesByModule(ctx context.Context, moduleID uuid.UUID) ([]UserModule, error) {
+	rows, err := q.db.Query(ctx, listUserModulesByModule, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserModule{}
+	for rows.Next() {
+		var i UserModule
+		if err := rows.Scan(
+			&i.UserID,
+			&i.ModuleID,
+			&i.AssignedBy,
+			&i.SourceGroupID,
+			&i.AssignedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVariantsByLesson = `-- name: ListVariantsByLesson :many
-SELECT id, lesson_id, title, position, created_at
+SELECT id, lesson_id, title, position, status, is_primary, created_at
 FROM variants
 WHERE lesson_id = $1
 ORDER BY position, created_at
@@ -671,6 +857,8 @@ func (q *Queries) ListVariantsByLesson(ctx context.Context, lessonID uuid.UUID) 
 			&i.LessonID,
 			&i.Title,
 			&i.Position,
+			&i.Status,
+			&i.IsPrimary,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -705,7 +893,7 @@ func (q *Queries) UpdateArticle(ctx context.Context, arg UpdateArticleParams) er
 }
 
 const updateLesson = `-- name: UpdateLesson :exec
-UPDATE lessons SET title = $2, position = $3, duration_seconds = $4 WHERE id = $1
+UPDATE lessons SET title = $2, position = $3, duration_seconds = $4, archived_at = $5 WHERE id = $1
 `
 
 type UpdateLessonParams struct {
@@ -713,6 +901,7 @@ type UpdateLessonParams struct {
 	Title           string
 	Position        int32
 	DurationSeconds *int32
+	ArchivedAt      *time.Time
 }
 
 func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) error {
@@ -721,22 +910,31 @@ func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) erro
 		arg.Title,
 		arg.Position,
 		arg.DurationSeconds,
+		arg.ArchivedAt,
 	)
 	return err
 }
 
 const updateModule = `-- name: UpdateModule :exec
-UPDATE modules SET title = $2, description = $3 WHERE id = $1
+UPDATE modules SET title = $2, description = $3, status = $4, success_threshold = $5 WHERE id = $1
 `
 
 type UpdateModuleParams struct {
-	ID          uuid.UUID
-	Title       string
-	Description string
+	ID               uuid.UUID
+	Title            string
+	Description      string
+	Status           string
+	SuccessThreshold int32
 }
 
 func (q *Queries) UpdateModule(ctx context.Context, arg UpdateModuleParams) error {
-	_, err := q.db.Exec(ctx, updateModule, arg.ID, arg.Title, arg.Description)
+	_, err := q.db.Exec(ctx, updateModule,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.Status,
+		arg.SuccessThreshold,
+	)
 	return err
 }
 
@@ -755,17 +953,25 @@ func (q *Queries) UpdateTopic(ctx context.Context, arg UpdateTopicParams) error 
 }
 
 const updateVariant = `-- name: UpdateVariant :exec
-UPDATE variants SET title = $2, position = $3 WHERE id = $1
+UPDATE variants SET title = $2, position = $3, status = $4, is_primary = $5 WHERE id = $1
 `
 
 type UpdateVariantParams struct {
-	ID       uuid.UUID
-	Title    string
-	Position int32
+	ID        uuid.UUID
+	Title     string
+	Position  int32
+	Status    string
+	IsPrimary bool
 }
 
 func (q *Queries) UpdateVariant(ctx context.Context, arg UpdateVariantParams) error {
-	_, err := q.db.Exec(ctx, updateVariant, arg.ID, arg.Title, arg.Position)
+	_, err := q.db.Exec(ctx, updateVariant,
+		arg.ID,
+		arg.Title,
+		arg.Position,
+		arg.Status,
+		arg.IsPrimary,
+	)
 	return err
 }
 

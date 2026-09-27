@@ -1,3 +1,5 @@
+import type { RouteLocationRaw } from 'vue-router';
+
 export default defineNuxtPlugin((nuxtApp) => {
   const nav = useNavHistoryStore();
   const router = useRouter();
@@ -7,9 +9,9 @@ export default defineNuxtPlugin((nuxtApp) => {
   });
 
   const originalReplace = router.replace.bind(router);
-  router.replace = ((to, extras) => {
+  router.replace = ((to: RouteLocationRaw) => {
     nav.markReplace();
-    return originalReplace(to, extras);
+    return originalReplace(to);
   }) as typeof router.replace;
 
   nuxtApp.hook('page:finish', () => {

@@ -31,10 +31,20 @@ type AttachmentRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+type ModuleListFilter struct {
+	Q       string
+	Scope   string
+	ActorID uuid.UUID
+}
+
 type ModuleRepository interface {
 	Create(ctx context.Context, module models.Module) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.Module, error)
 	List(ctx context.Context) ([]models.Module, error)
+	ListFiltered(ctx context.Context, filter ModuleListFilter) ([]models.Module, error)
+	CountLessons(ctx context.Context, moduleID uuid.UUID) (int, error)
+	CountAssignedUsers(ctx context.Context, moduleID uuid.UUID) (int, error)
+	CountAssignmentBreakdown(ctx context.Context, moduleID uuid.UUID) (groups int, users int, err error)
 	Update(ctx context.Context, module models.Module) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -43,7 +53,10 @@ type LessonRepository interface {
 	Create(ctx context.Context, lesson models.Lesson) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.Lesson, error)
 	ListByModule(ctx context.Context, moduleID uuid.UUID) ([]models.Lesson, error)
+	ListPool(ctx context.Context, q string) ([]models.Lesson, error)
 	FindByVariant(ctx context.Context, variantID uuid.UUID) (models.Lesson, error)
+	CountVariants(ctx context.Context, lessonID uuid.UUID) (int, error)
+	CountTickets(ctx context.Context, lessonID uuid.UUID) (int, error)
 	Update(ctx context.Context, lesson models.Lesson) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -52,6 +65,7 @@ type VariantRepository interface {
 	Create(ctx context.Context, variant models.Variant) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.Variant, error)
 	ListByLesson(ctx context.Context, lessonID uuid.UUID) ([]models.Variant, error)
+	ClearPrimary(ctx context.Context, lessonID uuid.UUID) error
 	Update(ctx context.Context, variant models.Variant) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

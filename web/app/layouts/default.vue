@@ -29,4 +29,33 @@
   width: 100%;
   min-height: 0;
 }
+
+.shell__main > :deep(.page-sheet) {
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
+  padding: 0;
+}
+
+.shell__main > :deep(.page-sheet > .sheet) {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    gap: var(--space-md);
+    padding: 16px;
+  }
+
+  .shell__main {
+    min-height: calc(100vh - 32px);
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    gap: 12px;
+    padding: 12px;
+  }
+}
 </style>

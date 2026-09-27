@@ -1,4 +1,4 @@
-export type TbButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type TbButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'icon';
 export type TbButtonWidth = 'auto' | 'block';
 
 export interface TbSelectOption {
@@ -18,6 +18,26 @@ export type TbIconName =
   | 'user'
   | 'copy'
   | 'chevron-down'
+  | 'chevron-right'
   | 'check'
   | 'x'
-  | 'file';
+  | 'file'
+  | 'search'
+  | 'chart'
+  | 'book'
+  | 'home'
+  | 'archive'
+  | 'calendar'
+  | 'pencil'
+  | 'play'
+  | 'clock'
+  | 'lock'
+  | 'info';
+
+export type TbBadgeTone = 'success' | 'warning' | 'info' | 'neutral' | 'danger';
+
+export interface TbTabItem {
+  id: string;
+  label: string;
+  count?: number;
+}

@@ -63,6 +63,22 @@ func (m Modules) FindByID(ctx context.Context, id uuid.UUID) (models.Module, err
 	return m.FindModuleByID(ctx, id)
 }
 func (m Modules) List(ctx context.Context) ([]models.Module, error) { return m.ListModules(ctx) }
+func (m Modules) ListFiltered(ctx context.Context, filter repositories.ModuleListFilter) ([]models.Module, error) {
+	return m.ListModulesFiltered(ctx, filter.Q, filter.Scope, filter.ActorID)
+}
+func (m Modules) CountLessons(ctx context.Context, moduleID uuid.UUID) (int, error) {
+	return m.CountLessonsByModule(ctx, moduleID)
+}
+func (m Modules) CountAssignedUsers(ctx context.Context, moduleID uuid.UUID) (int, error) {
+	ids, err := m.ListUserIDsByModule(ctx, moduleID)
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+func (m Modules) CountAssignmentBreakdown(ctx context.Context, moduleID uuid.UUID) (int, int, error) {
+	return m.CountModuleAssignmentBreakdown(ctx, moduleID)
+}
 func (m Modules) Update(ctx context.Context, module models.Module) error {
 	return m.UpdateModule(ctx, module)
 }
@@ -79,8 +95,17 @@ func (l Lessons) FindByID(ctx context.Context, id uuid.UUID) (models.Lesson, err
 func (l Lessons) ListByModule(ctx context.Context, moduleID uuid.UUID) ([]models.Lesson, error) {
 	return l.ListLessonsByModule(ctx, moduleID)
 }
+func (l Lessons) ListPool(ctx context.Context, q string) ([]models.Lesson, error) {
+	return l.ListLessonsPool(ctx, q)
+}
 func (l Lessons) FindByVariant(ctx context.Context, variantID uuid.UUID) (models.Lesson, error) {
 	return l.FindLessonByVariant(ctx, variantID)
+}
+func (l Lessons) CountVariants(ctx context.Context, lessonID uuid.UUID) (int, error) {
+	return l.CountVariantsByLesson(ctx, lessonID)
+}
+func (l Lessons) CountTickets(ctx context.Context, lessonID uuid.UUID) (int, error) {
+	return l.CountTicketsByLesson(ctx, lessonID)
 }
 func (l Lessons) Update(ctx context.Context, lesson models.Lesson) error {
 	return l.UpdateLesson(ctx, lesson)
@@ -97,6 +122,9 @@ func (v Variants) FindByID(ctx context.Context, id uuid.UUID) (models.Variant, e
 }
 func (v Variants) ListByLesson(ctx context.Context, lessonID uuid.UUID) ([]models.Variant, error) {
 	return v.ListVariantsByLesson(ctx, lessonID)
+}
+func (v Variants) ClearPrimary(ctx context.Context, lessonID uuid.UUID) error {
+	return v.ClearPrimaryVariants(ctx, lessonID)
 }
 func (v Variants) Update(ctx context.Context, variant models.Variant) error {
 	return v.UpdateVariant(ctx, variant)
@@ -116,6 +144,12 @@ func (a Assignments) Find(ctx context.Context, userID, moduleID uuid.UUID) (mode
 }
 func (a Assignments) Has(ctx context.Context, userID, moduleID uuid.UUID) (bool, error) {
 	return a.HasAssignment(ctx, userID, moduleID)
+}
+func (a Assignments) UserHasTopic(ctx context.Context, userID, topicID uuid.UUID) (bool, error) {
+	return a.Store.UserHasTopic(ctx, userID, topicID)
+}
+func (a Assignments) UserIDsByModule(ctx context.Context, moduleID uuid.UUID) ([]uuid.UUID, error) {
+	return a.ListUserIDsByModule(ctx, moduleID)
 }
 
 var _ repositories.TopicRepository = Topics{}

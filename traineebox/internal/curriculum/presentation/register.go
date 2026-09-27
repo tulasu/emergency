@@ -35,19 +35,24 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{OperationID: "create-module", Method: http.MethodPost, Path: "/modules", Summary: "Create module", Tags: []string{"Modules"}, Security: sec}, a.createModuleHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-modules", Method: http.MethodGet, Path: "/modules", Summary: "List modules", Tags: []string{"Modules"}, Security: sec}, a.listModulesHandler)
 	huma.Register(api, huma.Operation{OperationID: "get-module", Method: http.MethodGet, Path: "/modules/{moduleId}", Summary: "Get module", Tags: []string{"Modules"}, Security: sec}, a.getModuleHandler)
+	huma.Register(api, huma.Operation{OperationID: "get-module-summary", Method: http.MethodGet, Path: "/modules/{moduleId}/summary", Summary: "Get module summary", Tags: []string{"Modules"}, Security: sec}, a.getModuleSummaryHandler)
 	huma.Register(api, huma.Operation{OperationID: "update-module", Method: http.MethodPatch, Path: "/modules/{moduleId}", Summary: "Update module", Tags: []string{"Modules"}, Security: sec}, a.updateModuleHandler)
 	huma.Register(api, huma.Operation{OperationID: "delete-module", Method: http.MethodDelete, Path: "/modules/{moduleId}", Summary: "Delete module", Tags: []string{"Modules"}, Security: sec}, a.deleteModuleHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-my-modules", Method: http.MethodGet, Path: "/me/modules", Summary: "List my assigned modules", Tags: []string{"Modules"}, Security: sec}, a.listMyModulesHandler)
 
 	huma.Register(api, huma.Operation{OperationID: "create-lesson", Method: http.MethodPost, Path: "/modules/{moduleId}/lessons", Summary: "Create lesson", Tags: []string{"Lessons"}, Security: sec}, a.createLessonHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-lessons", Method: http.MethodGet, Path: "/modules/{moduleId}/lessons", Summary: "List lessons", Tags: []string{"Lessons"}, Security: sec}, a.listLessonsHandler)
+	huma.Register(api, huma.Operation{OperationID: "copy-lesson-from-pool", Method: http.MethodPost, Path: "/modules/{moduleId}/lessons/from-pool", Summary: "Copy lesson from pool", Tags: []string{"Lessons"}, Security: sec}, a.copyLessonFromPoolHandler)
+	huma.Register(api, huma.Operation{OperationID: "list-lessons-pool", Method: http.MethodGet, Path: "/lessons", Summary: "List lessons pool", Tags: []string{"Lessons"}, Security: sec}, a.listLessonsPoolHandler)
 	huma.Register(api, huma.Operation{OperationID: "update-lesson", Method: http.MethodPatch, Path: "/lessons/{lessonId}", Summary: "Update lesson", Tags: []string{"Lessons"}, Security: sec}, a.updateLessonHandler)
+	huma.Register(api, huma.Operation{OperationID: "archive-lesson", Method: http.MethodPost, Path: "/lessons/{lessonId}/archive", Summary: "Archive lesson", Tags: []string{"Lessons"}, Security: sec}, a.archiveLessonHandler)
 	huma.Register(api, huma.Operation{OperationID: "delete-lesson", Method: http.MethodDelete, Path: "/lessons/{lessonId}", Summary: "Delete lesson", Tags: []string{"Lessons"}, Security: sec}, a.deleteLessonHandler)
 
 	huma.Register(api, huma.Operation{OperationID: "create-variant", Method: http.MethodPost, Path: "/lessons/{lessonId}/variants", Summary: "Create variant", Tags: []string{"Variants"}, Security: sec}, a.createVariantHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-variants", Method: http.MethodGet, Path: "/lessons/{lessonId}/variants", Summary: "List variants", Tags: []string{"Variants"}, Security: sec}, a.listVariantsHandler)
 	huma.Register(api, huma.Operation{OperationID: "get-variant", Method: http.MethodGet, Path: "/variants/{variantId}", Summary: "Get variant", Tags: []string{"Variants"}, Security: sec}, a.getVariantHandler)
 	huma.Register(api, huma.Operation{OperationID: "update-variant", Method: http.MethodPatch, Path: "/variants/{variantId}", Summary: "Update variant", Tags: []string{"Variants"}, Security: sec}, a.updateVariantHandler)
+	huma.Register(api, huma.Operation{OperationID: "clone-variant", Method: http.MethodPost, Path: "/variants/{variantId}/clone", Summary: "Clone variant", Tags: []string{"Variants"}, Security: sec}, a.cloneVariantHandler)
 	huma.Register(api, huma.Operation{OperationID: "delete-variant", Method: http.MethodDelete, Path: "/variants/{variantId}", Summary: "Delete variant", Tags: []string{"Variants"}, Security: sec}, a.deleteVariantHandler)
 
 	huma.Register(api, huma.Operation{OperationID: "assign-module-group", Method: http.MethodPost, Path: "/groups/{groupId}/modules", Summary: "Assign module to group students", Tags: []string{"Assignments"}, Security: sec}, a.assignGroupHandler)
@@ -328,18 +333,22 @@ func (a *API) createModuleHandler(ctx context.Context, in *struct {
 
 func (a *API) listModulesHandler(ctx context.Context, in *struct {
 	Authorization string `header:"Authorization"`
+	Q             string `query:"q"`
+	Scope         string `query:"scope"`
 }) (*struct{ Body []moduleDTO }, error) {
 	user, err := a.requireSignedIn(ctx, in.Authorization)
 	if err != nil {
 		return nil, err
 	}
-	items, err := a.listModules.Execute(ctx, user.ID, user.Role)
+	items, err := a.listModules.ExecuteFiltered(ctx, application.ListModulesInput{
+		ActorID: user.ID, Role: user.Role, Q: in.Q, Scope: in.Scope,
+	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 	out := make([]moduleDTO, 0, len(items))
 	for _, it := range items {
-		out = append(out, toModuleDTO(it))
+		out = append(out, toModuleListDTO(it))
 	}
 	return &struct{ Body []moduleDTO }{Body: out}, nil
 }
@@ -359,20 +368,38 @@ func (a *API) getModuleHandler(ctx context.Context, in *struct {
 	return &struct{ Body moduleDTO }{Body: toModuleDTO(module)}, nil
 }
 
+func (a *API) getModuleSummaryHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	ModuleID      uuid.UUID `path:"moduleId"`
+}) (*struct{ Body moduleSummaryDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := a.getModuleSummary.Execute(ctx, user.Role, in.ModuleID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body moduleSummaryDTO }{Body: toModuleSummaryDTO(summary)}, nil
+}
+
 func (a *API) updateModuleHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	ModuleID      uuid.UUID `path:"moduleId"`
 	Body          struct {
-		Title       string `json:"title" minLength:"1" maxLength:"256"`
-		Description string `json:"description"`
+		Title            string `json:"title" minLength:"1" maxLength:"256"`
+		Description      string `json:"description"`
+		Status           string `json:"status,omitempty"`
+		SuccessThreshold *int   `json:"success_threshold,omitempty"`
 	}
 }) (*struct{ Body moduleDTO }, error) {
 	user, err := a.requireSignedIn(ctx, in.Authorization)
 	if err != nil {
 		return nil, err
 	}
-	module, err := a.updateModule.Execute(ctx, application.UpdateModuleInput{
+	module, err := a.updateModule.ExecuteExtended(ctx, application.UpdateModuleInputExtended{
 		Role: user.Role, ModuleID: in.ModuleID, Title: in.Body.Title, Description: in.Body.Description,
+		Status: in.Body.Status, SuccessThreshold: in.Body.SuccessThreshold,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -548,21 +575,99 @@ func (a *API) updateVariantHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	VariantID     uuid.UUID `path:"variantId"`
 	Body          struct {
-		Title    string `json:"title" minLength:"1" maxLength:"256"`
-		Position int    `json:"position"`
+		Title     string `json:"title" minLength:"1" maxLength:"256"`
+		Position  int    `json:"position"`
+		Status    string `json:"status,omitempty"`
+		IsPrimary *bool  `json:"is_primary,omitempty"`
 	}
 }) (*struct{ Body variantDTO }, error) {
 	user, err := a.requireSignedIn(ctx, in.Authorization)
 	if err != nil {
 		return nil, err
 	}
-	variant, err := a.updateVariant.Execute(ctx, application.UpdateVariantInput{
+	variant, err := a.updateVariant.ExecuteExtended(ctx, application.UpdateVariantInputExtended{
 		Role: user.Role, VariantID: in.VariantID, Title: in.Body.Title, Position: in.Body.Position,
+		Status: in.Body.Status, IsPrimary: in.Body.IsPrimary,
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return &struct{ Body variantDTO }{Body: toVariantDTO(variant)}, nil
+}
+
+func (a *API) cloneVariantHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	VariantID     uuid.UUID `path:"variantId"`
+	Body          struct {
+		Title string `json:"title"`
+	}
+}) (*struct{ Body variantDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	variant, err := a.cloneVariant.Execute(ctx, application.CloneVariantInput{
+		Role: user.Role, VariantID: in.VariantID, Title: in.Body.Title,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body variantDTO }{Body: toVariantDTO(variant)}, nil
+}
+
+func (a *API) listLessonsPoolHandler(ctx context.Context, in *struct {
+	Authorization string `header:"Authorization"`
+	Q             string `query:"q"`
+}) (*struct{ Body []lessonDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	items, err := a.listLessonsPool.Execute(ctx, user.Role, in.Q)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]lessonDTO, 0, len(items))
+	for _, it := range items {
+		out = append(out, toLessonDTO(it))
+	}
+	return &struct{ Body []lessonDTO }{Body: out}, nil
+}
+
+func (a *API) copyLessonFromPoolHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	ModuleID      uuid.UUID `path:"moduleId"`
+	Body          struct {
+		LessonID uuid.UUID `json:"lesson_id" format:"uuid"`
+		Position int       `json:"position"`
+	}
+}) (*struct{ Body lessonDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	lesson, err := a.copyLessonPool.Execute(ctx, application.CopyLessonFromPoolInput{
+		Role: user.Role, ModuleID: in.ModuleID, SourceLessonID: in.Body.LessonID, Position: in.Body.Position,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body lessonDTO }{Body: toLessonDTO(lesson)}, nil
+}
+
+func (a *API) archiveLessonHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	LessonID      uuid.UUID `path:"lessonId"`
+}) (*struct{ Body lessonDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	lesson, err := a.archiveLesson.Execute(ctx, user.Role, in.LessonID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body lessonDTO }{Body: toLessonDTO(lesson)}, nil
 }
 
 func (a *API) deleteVariantHandler(ctx context.Context, in *struct {

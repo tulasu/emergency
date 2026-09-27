@@ -19,6 +19,14 @@ FROM tickets
 WHERE variant_id = $1
 ORDER BY created_at;
 
+-- name: ListLibraryTickets :many
+SELECT id, variant_id, topic_id, title, body, created_by, created_at,
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
+FROM tickets
+WHERE variant_id IS NULL
+AND (sqlc.narg(q)::text IS NULL OR sqlc.narg(q)::text = '' OR title ILIKE '%' || sqlc.narg(q)::text || '%')
+ORDER BY created_at DESC;
+
 -- name: UpdateTicket :exec
 UPDATE tickets SET title = $2, body = $3, topic_id = $4 WHERE id = $1;
 
@@ -72,31 +80,31 @@ SELECT service_code FROM reference_answer_services WHERE ticket_id = $1;
 -- name: CreateAttempt :exec
 INSERT INTO ticket_attempts (
     id, variant_id, user_id, granted_by, attempt_no, status,
-    started_at, deadline_at, finished_at, score, report
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+    available_from, started_at, deadline_at, finished_at, score, report
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
 
 -- name: GetAttemptByID :one
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE id = $1;
 
 -- name: FindOpenAttempt :one
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE variant_id = $1 AND user_id = $2 AND status IN ('available', 'in_progress');
 
 -- name: ListAttemptsByVariantUser :many
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE variant_id = $1 AND user_id = $2
 ORDER BY attempt_no;
 
 -- name: ListAttemptsByUser :many
 SELECT id, variant_id, user_id, granted_by, attempt_no, status,
-       started_at, deadline_at, finished_at, score, report
+       available_from, started_at, deadline_at, finished_at, score, report
 FROM ticket_attempts
 WHERE user_id = $1
 ORDER BY attempt_no;

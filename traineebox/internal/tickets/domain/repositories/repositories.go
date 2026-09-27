@@ -21,6 +21,7 @@ type TicketRepository interface {
 	Create(ctx context.Context, ticket models.Ticket) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.Ticket, error)
 	ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Ticket, error)
+	ListLibrary(ctx context.Context, q string) ([]models.Ticket, error)
 	Update(ctx context.Context, ticket models.Ticket) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	SaveReference(ctx context.Context, ref models.ReferenceAnswer) error

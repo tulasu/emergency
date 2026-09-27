@@ -10,20 +10,24 @@ import (
 )
 
 type Module struct {
-	ID          uuid.UUID
-	Title       value_objects.Title
-	Description string
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
+	ID               uuid.UUID
+	Title            value_objects.Title
+	Description      string
+	Status           value_objects.ModuleStatus
+	SuccessThreshold int
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
 }
 
 func NewModule(title value_objects.Title, description string, createdBy uuid.UUID) Module {
 	return Module{
-		ID:          uuid.New(),
-		Title:       title,
-		Description: description,
-		CreatedBy:   createdBy,
-		CreatedAt:   time.Now().UTC(),
+		ID:               uuid.New(),
+		Title:            title,
+		Description:      description,
+		Status:           value_objects.ModuleStatusDraft,
+		SuccessThreshold: 70,
+		CreatedBy:        createdBy,
+		CreatedAt:        time.Now().UTC(),
 	}
 }
 
@@ -33,6 +37,7 @@ type Lesson struct {
 	Title           value_objects.Title
 	Position        int
 	DurationSeconds *int
+	ArchivedAt      *time.Time
 	CreatedAt       time.Time
 }
 
@@ -50,11 +55,17 @@ func NewLesson(moduleID uuid.UUID, title value_objects.Title, position int, dura
 	}, nil
 }
 
+func (l *Lesson) Archive(now time.Time) {
+	l.ArchivedAt = &now
+}
+
 type Variant struct {
 	ID        uuid.UUID
 	LessonID  uuid.UUID
 	Title     value_objects.Title
 	Position  int
+	Status    value_objects.VariantStatus
+	IsPrimary bool
 	CreatedAt time.Time
 }
 
@@ -64,6 +75,8 @@ func NewVariant(lessonID uuid.UUID, title value_objects.Title, position int) Var
 		LessonID:  lessonID,
 		Title:     title,
 		Position:  position,
+		Status:    value_objects.VariantStatusDraft,
+		IsPrimary: false,
 		CreatedAt: time.Now().UTC(),
 	}
 }
@@ -89,4 +102,45 @@ func NewUserModule(userID, moduleID, assignedBy uuid.UUID, sourceGroupID *uuid.U
 type LessonVariantPick struct {
 	LessonID  uuid.UUID
 	VariantID uuid.UUID
+}
+
+type ModuleListItem struct {
+	Module         Module
+	LessonCount    int
+	AssignedCount  int
+	AssignedGroups int
+	AssignedUsers  int
+	AssignedLabel  string
+	OpenedDone     int
+	OpenedTotal    int
+	SuccessRate    *float64
+}
+
+type LessonSummary struct {
+	Lesson        Lesson
+	VariantCount  int
+	TicketCount   int
+	VariantsLabel string
+	OpenedFor     int
+	OpenedTotal   int
+	PassedRate    *float64
+	Attention     string
+}
+
+type AssignmentGroupSummary struct {
+	Label string
+	Count int
+}
+
+type AssignmentSummary struct {
+	TotalUsers  int
+	Groups      []AssignmentGroupSummary
+	Individuals int
+}
+
+type ModuleSummary struct {
+	Module     Module
+	Lessons    []LessonSummary
+	Assignment AssignmentSummary
+	Attention  []string
 }

@@ -32,17 +32,18 @@ func (r *AttemptRepository) Create(ctx context.Context, attempt models.Attempt) 
 		return err
 	}
 	if err := r.q.CreateAttempt(ctx, ticketssql.CreateAttemptParams{
-		ID:         attempt.ID,
-		VariantID:  attempt.VariantID,
-		UserID:     attempt.UserID,
-		GrantedBy:  attempt.GrantedBy,
-		AttemptNo:  int32(attempt.AttemptNo),
-		Status:     attempt.Status.String(),
-		StartedAt:  attempt.StartedAt,
-		DeadlineAt: attempt.DeadlineAt,
-		FinishedAt: attempt.FinishedAt,
-		Score:      intPtrToInt16(attempt.Score),
-		Report:     report,
+		ID:            attempt.ID,
+		VariantID:     attempt.VariantID,
+		UserID:        attempt.UserID,
+		GrantedBy:     attempt.GrantedBy,
+		AttemptNo:     int32(attempt.AttemptNo),
+		Status:        attempt.Status.String(),
+		AvailableFrom: attempt.AvailableFrom,
+		StartedAt:     attempt.StartedAt,
+		DeadlineAt:    attempt.DeadlineAt,
+		FinishedAt:    attempt.FinishedAt,
+		Score:         intPtrToInt16(attempt.Score),
+		Report:        report,
 	}); err != nil {
 		if isUniqueViolation(err) {
 			return errs.ErrConflict
@@ -227,18 +228,19 @@ func (r *AttemptRepository) loadAttempt(ctx context.Context, row ticketssql.Tick
 		)
 	}
 	return models.Attempt{
-		ID:         row.ID,
-		VariantID:  row.VariantID,
-		UserID:     row.UserID,
-		GrantedBy:  row.GrantedBy,
-		AttemptNo:  int(row.AttemptNo),
-		Status:     status,
-		StartedAt:  row.StartedAt,
-		DeadlineAt: row.DeadlineAt,
-		FinishedAt: row.FinishedAt,
-		Score:      int16PtrToInt(row.Score),
-		Answers:    answers,
-		Report:     report,
+		ID:            row.ID,
+		VariantID:     row.VariantID,
+		UserID:        row.UserID,
+		GrantedBy:     row.GrantedBy,
+		AttemptNo:     int(row.AttemptNo),
+		Status:        status,
+		AvailableFrom: row.AvailableFrom,
+		StartedAt:     row.StartedAt,
+		DeadlineAt:    row.DeadlineAt,
+		FinishedAt:    row.FinishedAt,
+		Score:         int16PtrToInt(row.Score),
+		Answers:       answers,
+		Report:        report,
 	}, nil
 }
 

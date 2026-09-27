@@ -7,11 +7,13 @@ export default defineNuxtConfig({
     '~/assets/css/tokens.css',
     '~/assets/css/typography.css',
     '~/assets/css/sheet.css',
+    '~/assets/css/curriculum.css',
   ],
   components: [
     { path: '~/components/ui', pathPrefix: false },
     { path: '~/components/layout', pathPrefix: false },
     { path: '~/components/users', pathPrefix: false },
+    { path: '~/components/curriculum', pathPrefix: false },
   ],
   runtimeConfig: {
     public: {
@@ -35,27 +37,8 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/users/new/batch': { redirect: '/users/new/import' },
-    '/auth/**': { proxy: 'http://127.0.0.1:8080/auth/**' },
-    '/groups/**': { proxy: 'http://127.0.0.1:8080/groups/**' },
-    '/health/**': { proxy: 'http://127.0.0.1:8080/health/**' },
-  },
-  vite: {
-    server: {
-      proxy: {
-        '/auth': { target: 'http://127.0.0.1:8080' },
-        '/health': { target: 'http://127.0.0.1:8080' },
-        '/groups': { target: 'http://127.0.0.1:8080' },
-      },
-    },
-  },
-  nitro: {
-    devProxy: {
-      '/auth': { target: 'http://127.0.0.1:8080' },
-      '/health': { target: 'http://127.0.0.1:8080' },
-      '/groups': { target: 'http://127.0.0.1:8080' },
-    },
   },
   typescript: {
     strict: true,
   },
-})
+});

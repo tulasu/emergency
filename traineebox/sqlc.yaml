@@ -76,6 +76,16 @@ sql:
             go_type:
               import: "time"
               type: "Time"
+          - column: "tickets.variant_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+          - column: "ticket_attempts.available_from"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
           - column: "ticket_attempts.started_at"
             go_type:
               import: "time"
@@ -124,6 +134,11 @@ sql:
           - column: "lessons.duration_seconds"
             go_type:
               type: "int32"
+              pointer: true
+          - column: "lessons.archived_at"
+            go_type:
+              import: "time"
+              type: "Time"
               pointer: true
           - column: "user_modules.source_group_id"
             go_type:

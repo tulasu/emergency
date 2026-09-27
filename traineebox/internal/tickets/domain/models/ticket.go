@@ -10,7 +10,7 @@ import (
 
 type Ticket struct {
 	ID              uuid.UUID
-	VariantID       uuid.UUID
+	VariantID       *uuid.UUID
 	TopicID         uuid.UUID
 	Title           value_objects.TicketTitle
 	Body            string
@@ -26,9 +26,23 @@ type Ticket struct {
 }
 
 func NewTicket(variantID, topicID uuid.UUID, title value_objects.TicketTitle, body string, createdBy uuid.UUID) Ticket {
+	vid := variantID
 	return Ticket{
 		ID:          uuid.New(),
-		VariantID:   variantID,
+		VariantID:   &vid,
+		TopicID:     topicID,
+		Title:       title,
+		Body:        body,
+		CreatedBy:   createdBy,
+		CreatedAt:   time.Now().UTC(),
+		AudioStatus: "none",
+	}
+}
+
+func NewLibraryTicket(topicID uuid.UUID, title value_objects.TicketTitle, body string, createdBy uuid.UUID) Ticket {
+	return Ticket{
+		ID:          uuid.New(),
+		VariantID:   nil,
 		TopicID:     topicID,
 		Title:       title,
 		Body:        body,

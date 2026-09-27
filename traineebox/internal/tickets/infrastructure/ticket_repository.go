@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -75,6 +76,33 @@ func (r *TicketRepository) ListByVariant(ctx context.Context, variantID uuid.UUI
 		tickets = append(tickets, ticket)
 	}
 	return tickets, rows.Err()
+}
+
+func (r *TicketRepository) ListLibrary(ctx context.Context, q string) ([]models.Ticket, error) {
+	rows, err := r.q.ListLibraryTickets(ctx, textArg(q))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.Ticket, 0, len(rows))
+	for _, row := range rows {
+		t := models.Ticket{
+			ID: row.ID, VariantID: row.VariantID, TopicID: row.TopicID,
+			Title: value_objects.TicketTitle(row.Title), Body: row.Body,
+			CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt,
+			ScenarioJSON: string(row.Scenario), ScenarioVersion: row.ScenarioVersion,
+			AudioDigest: row.AudioDigest, AudioStatus: row.AudioStatus,
+			Reference: string(row.Reference), Mode: row.Mode, Briefing: row.Briefing,
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+func textArg(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: s, Valid: true}
 }
 
 func (r *TicketRepository) Update(ctx context.Context, ticket models.Ticket) error {

@@ -32,14 +32,14 @@ type serviceDTO struct {
 }
 
 type ticketDTO struct {
-	ID          string `json:"id"`
-	VariantID   string `json:"variant_id"`
-	TopicID     string `json:"topic_id"`
-	Title       string `json:"title"`
-	Body        string `json:"body"`
-	CreatedBy   string `json:"created_by"`
-	CreatedAt   string `json:"created_at"`
-	AudioStatus string `json:"audio_status"`
+	ID          string  `json:"id"`
+	VariantID   *string `json:"variant_id,omitempty"`
+	TopicID     string  `json:"topic_id"`
+	Title       string  `json:"title"`
+	Body        string  `json:"body"`
+	CreatedBy   string  `json:"created_by"`
+	CreatedAt   string  `json:"created_at"`
+	AudioStatus string  `json:"audio_status"`
 }
 
 type answerDTO struct {
@@ -71,18 +71,19 @@ type reportDTO struct {
 }
 
 type attemptDTO struct {
-	ID         string               `json:"id"`
-	VariantID  string               `json:"variant_id"`
-	UserID     string               `json:"user_id"`
-	GrantedBy  string               `json:"granted_by"`
-	AttemptNo  int                  `json:"attempt_no"`
-	Status     string               `json:"status"`
-	StartedAt  *string              `json:"started_at,omitempty"`
-	DeadlineAt *string              `json:"deadline_at,omitempty"`
-	FinishedAt *string              `json:"finished_at,omitempty"`
-	Score      *int                 `json:"score,omitempty"`
-	Answers    map[string]answerDTO `json:"answers"`
-	Report     reportDTO            `json:"report"`
+	ID            string               `json:"id"`
+	VariantID     string               `json:"variant_id"`
+	UserID        string               `json:"user_id"`
+	GrantedBy     string               `json:"granted_by"`
+	AttemptNo     int                  `json:"attempt_no"`
+	Status        string               `json:"status"`
+	AvailableFrom *string              `json:"available_from,omitempty"`
+	StartedAt     *string              `json:"started_at,omitempty"`
+	DeadlineAt    *string              `json:"deadline_at,omitempty"`
+	FinishedAt    *string              `json:"finished_at,omitempty"`
+	Score         *int                 `json:"score,omitempty"`
+	Answers       map[string]answerDTO `json:"answers"`
+	Report        reportDTO            `json:"report"`
 }
 
 type referenceAnswerDTO struct {
@@ -97,11 +98,16 @@ type referenceAnswerDTO struct {
 }
 
 func toTicketDTO(t models.Ticket) ticketDTO {
-	return ticketDTO{
-		ID: t.ID.String(), VariantID: t.VariantID.String(), TopicID: t.TopicID.String(),
+	dto := ticketDTO{
+		ID: t.ID.String(), TopicID: t.TopicID.String(),
 		Title: t.Title.String(), Body: t.Body, CreatedBy: t.CreatedBy.String(),
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano), AudioStatus: t.AudioStatus,
 	}
+	if t.VariantID != nil {
+		s := t.VariantID.String()
+		dto.VariantID = &s
+	}
+	return dto
 }
 
 func toAttemptDTO(a models.Attempt) attemptDTO {
@@ -112,6 +118,7 @@ func toAttemptDTO(a models.Attempt) attemptDTO {
 	return attemptDTO{
 		ID: a.ID.String(), VariantID: a.VariantID.String(), UserID: a.UserID.String(),
 		GrantedBy: a.GrantedBy.String(), AttemptNo: a.AttemptNo, Status: a.Status.String(),
+		AvailableFrom: formatTimePtr(a.AvailableFrom),
 		StartedAt: formatTimePtr(a.StartedAt), DeadlineAt: formatTimePtr(a.DeadlineAt),
 		FinishedAt: formatTimePtr(a.FinishedAt), Score: a.Score, Answers: answers, Report: toReportDTO(a.Report),
 	}

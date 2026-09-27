@@ -12,18 +12,19 @@ import (
 type Scorer func(ref ReferenceAnswer, answer Answer) (int, error)
 
 type Attempt struct {
-	ID         uuid.UUID
-	VariantID  uuid.UUID
-	UserID     uuid.UUID
-	GrantedBy  uuid.UUID
-	AttemptNo  int
-	Status     value_objects.AttemptStatus
-	StartedAt  *time.Time
-	DeadlineAt *time.Time
-	FinishedAt *time.Time
-	Score      *int
-	Answers    map[uuid.UUID]Answer
-	Report     Report
+	ID            uuid.UUID
+	VariantID     uuid.UUID
+	UserID        uuid.UUID
+	GrantedBy     uuid.UUID
+	AttemptNo     int
+	Status        value_objects.AttemptStatus
+	AvailableFrom *time.Time
+	StartedAt     *time.Time
+	DeadlineAt    *time.Time
+	FinishedAt    *time.Time
+	Score         *int
+	Answers       map[uuid.UUID]Answer
+	Report        Report
 }
 
 func NewAvailableAttempt(variantID, userID, grantedBy uuid.UUID, attemptNo int) Attempt {
@@ -37,6 +38,13 @@ func NewAvailableAttempt(variantID, userID, grantedBy uuid.UUID, attemptNo int) 
 		Answers:   map[uuid.UUID]Answer{},
 		Report:    EmptyReport(),
 	}
+}
+
+func NewAvailableAttemptWithSchedule(variantID, userID, grantedBy uuid.UUID, attemptNo int, availableFrom, deadline *time.Time) Attempt {
+	a := NewAvailableAttempt(variantID, userID, grantedBy, attemptNo)
+	a.AvailableFrom = availableFrom
+	a.DeadlineAt = deadline
+	return a
 }
 
 func (a Attempt) IsExpired(now time.Time) bool {

@@ -8,7 +8,9 @@
   --color-border-strong: #14141466;
   --color-primary: #3657db;
   --color-primary-text: #ffffff;
+  --color-primary-soft: #3657db08;
   --color-secondary: #e4eaf9;
+  --color-neutral-soft: #14141414;
   --color-danger: #c62828;
   --color-danger-soft: #fdecea;
   --color-success: #1b7a3a;
@@ -16,12 +18,12 @@
   --color-warning: #c77b14;
   --color-warning-soft: #fff4e0;
   --font-sans: "Manrope", system-ui, sans-serif;
-  --font-display: 700 28px/1.2 var(--font-sans);
+  --font-display: 700 32px/1.2 var(--font-sans);
   --font-title: 500 28px/1.2 var(--font-sans);
-  --font-block: 700 16px/1.3 var(--font-sans);
-  --font-body: 500 16px/1.4 var(--font-sans);
-  --font-mute: 400 16px/1.4 var(--font-sans);
-  --font-cap: 500 12px/1.3 var(--font-sans);
+  --font-block: 700 15px/1.3 var(--font-sans);
+  --font-body: 500 14px/1.4 var(--font-sans);
+  --font-mute: 400 15px/1.4 var(--font-sans);
+  --font-cap: 500 11px/1.3 var(--font-sans);
   --radius-sm: 8px;
   --radius-md: 12px;
   --space-sm: 8px;

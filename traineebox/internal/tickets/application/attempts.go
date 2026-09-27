@@ -21,10 +21,12 @@ type GrantAttempt struct {
 }
 
 type GrantAttemptInput struct {
-	ActorID   uuid.UUID
-	Role      value_objects.AccountRole
-	UserID    uuid.UUID
-	VariantID uuid.UUID
+	ActorID       uuid.UUID
+	Role          value_objects.AccountRole
+	UserID        uuid.UUID
+	VariantID     uuid.UUID
+	AvailableFrom *time.Time
+	DeadlineAt    *time.Time
 }
 
 func (uc GrantAttempt) Execute(ctx context.Context, in GrantAttemptInput) (models.Attempt, error) {
@@ -34,10 +36,10 @@ func (uc GrantAttempt) Execute(ctx context.Context, in GrantAttemptInput) (model
 	if err := uc.Curriculum.VariantExists(ctx, in.VariantID); err != nil {
 		return models.Attempt{}, err
 	}
-	return issueAvailable(ctx, uc.Attempts, in.UserID, in.VariantID, in.ActorID)
+	return issueAvailable(ctx, uc.Attempts, in.UserID, in.VariantID, in.ActorID, in.AvailableFrom, in.DeadlineAt)
 }
 
-func issueAvailable(ctx context.Context, attempts repositories.AttemptRepository, userID, variantID, grantedBy uuid.UUID) (models.Attempt, error) {
+func issueAvailable(ctx context.Context, attempts repositories.AttemptRepository, userID, variantID, grantedBy uuid.UUID, availableFrom, deadline *time.Time) (models.Attempt, error) {
 	open, err := attempts.FindOpen(ctx, variantID, userID)
 	if err == nil {
 		return open, nil
@@ -49,7 +51,7 @@ func issueAvailable(ctx context.Context, attempts repositories.AttemptRepository
 	if err != nil {
 		return models.Attempt{}, err
 	}
-	attempt := models.NewAvailableAttempt(variantID, userID, grantedBy, no)
+	attempt := models.NewAvailableAttemptWithSchedule(variantID, userID, grantedBy, no, availableFrom, deadline)
 	if err := attempts.Create(ctx, attempt); err != nil {
 		if errors.Is(err, errs.ErrConflict) {
 			return attempts.FindOpen(ctx, variantID, userID)
@@ -64,7 +66,7 @@ type IssueAvailable struct {
 }
 
 func (uc IssueAvailable) IssueAvailable(ctx context.Context, userID, variantID, grantedBy uuid.UUID) error {
-	_, err := issueAvailable(ctx, uc.Attempts, userID, variantID, grantedBy)
+	_, err := issueAvailable(ctx, uc.Attempts, userID, variantID, grantedBy, nil, nil)
 	return err
 }
 
@@ -146,7 +148,7 @@ func (uc SaveAttemptAnswer) Execute(ctx context.Context, in SaveAttemptAnswerInp
 	if err != nil {
 		return models.Attempt{}, err
 	}
-	if ticket.VariantID != attempt.VariantID {
+	if ticket.VariantID == nil || *ticket.VariantID != attempt.VariantID {
 		return models.Attempt{}, errs.ErrInvalidInput
 	}
 	now := time.Now().UTC()

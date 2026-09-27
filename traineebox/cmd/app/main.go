@@ -104,25 +104,33 @@ func main() {
 
 	createTicketUC := ticketsapp.CreateTicket{Tickets: ticketsRepo, Curriculum: lookup}
 	setReferenceUC := ticketsapp.SetReferenceAnswer{Tickets: ticketsRepo, Catalog: catalogRepo}
+	grantAttemptUC := ticketsapp.GrantAttempt{Attempts: attemptsRepo, Curriculum: lookup}
+	groupsAdapter := currinfra.GroupsAdapter{Groups: groupsRepo}
 	ticketsHandlers := ticketspresentation.NewAPI(ticketspresentation.Deps{
 		ListIncidentTypes:    ticketsapp.ListIncidentTypes{Catalog: catalogRepo},
 		ListTagsByType:       ticketsapp.ListTagsByType{Catalog: catalogRepo},
 		ListServices:         ticketsapp.ListServices{Catalog: catalogRepo},
 		RecommendServices:    ticketsapp.RecommendServices{Catalog: catalogRepo},
 		CreateTicket:         createTicketUC,
+		CreateLibraryTicket:  ticketsapp.CreateLibraryTicket{Tickets: ticketsRepo, Curriculum: lookup},
+		ListLibraryTickets:   ticketsapp.ListLibraryTickets{Tickets: ticketsRepo},
 		ListTicketsByVariant: ticketsapp.ListTicketsByVariant{Tickets: ticketsRepo, Attempts: attemptsRepo},
+		CopyTicketFromPool:   ticketsapp.CopyTicketFromPool{Tickets: ticketsRepo, Curriculum: lookup},
 		GetTicket:            ticketsapp.GetTicket{Tickets: ticketsRepo, Attempts: attemptsRepo},
 		UpdateTicket:         ticketsapp.UpdateTicket{Tickets: ticketsRepo, Curriculum: lookup},
 		DeleteTicket:         ticketsapp.DeleteTicket{Tickets: ticketsRepo, Audio: audioClient},
 		SetReferenceAnswer:   setReferenceUC,
-		GrantAttempt:         ticketsapp.GrantAttempt{Attempts: attemptsRepo, Curriculum: lookup},
-		StartAttempt:         ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Curriculum: lookup},
-		SaveAttemptAnswer:    ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo},
-		SubmitAttempt:        ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo},
-		GetMyAttempt:         ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo},
-		ListMyAttempts:       ticketsapp.ListMyAttempts{Attempts: attemptsRepo},
-		GetAttemptReport:     ticketsapp.GetAttemptReport{Attempts: attemptsRepo},
-		Authenticate:         ticketsSessionAuthenticator{auth: authenticate},
+		GrantAttempt:         grantAttemptUC,
+		OpenVariant: ticketsapp.OpenVariant{
+			Grant: grantAttemptUC, Groups: groupsAdapter, Modules: assignments,
+		},
+		StartAttempt:      ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Curriculum: lookup},
+		SaveAttemptAnswer: ticketsapp.SaveAttemptAnswer{Tickets: ticketsRepo, Attempts: attemptsRepo, Catalog: catalogRepo},
+		SubmitAttempt:     ticketsapp.SubmitAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo},
+		GetMyAttempt:      ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo},
+		ListMyAttempts:    ticketsapp.ListMyAttempts{Attempts: attemptsRepo},
+		GetAttemptReport:  ticketsapp.GetAttemptReport{Attempts: attemptsRepo},
+		Authenticate:      ticketsSessionAuthenticator{auth: authenticate},
 	})
 
 	currHandlers := currpresentation.NewAPI(currpresentation.Deps{
@@ -143,20 +151,25 @@ func main() {
 		CreateModule:     currapp.CreateModule{Modules: modules},
 		ListModules:      currapp.ListModules{Modules: modules, Assignments: assignments},
 		GetModule:        currapp.GetModule{Modules: modules, Assignments: assignments},
+		GetModuleSummary: currapp.GetModuleSummary{Modules: modules, Lessons: lessons, Variants: variants},
 		UpdateModule:     currapp.UpdateModule{Modules: modules},
 		DeleteModule:     currapp.DeleteModule{Modules: modules},
 		CreateLesson:     currapp.CreateLesson{Modules: modules, Lessons: lessons},
 		ListLessons:      currapp.ListLessons{Modules: modules, Lessons: lessons, Assignments: assignments},
+		ListLessonsPool:  currapp.ListLessonsPool{Lessons: lessons},
+		CopyLessonPool:   currapp.CopyLessonFromPool{Modules: modules, Lessons: lessons, Variants: variants},
+		ArchiveLesson:    currapp.ArchiveLesson{Lessons: lessons},
 		UpdateLesson:     currapp.UpdateLesson{Lessons: lessons},
 		DeleteLesson:     currapp.DeleteLesson{Lessons: lessons},
 		CreateVariant:    currapp.CreateVariant{Lessons: lessons, Variants: variants},
 		ListVariants:     currapp.ListVariants{Lessons: lessons, Variants: variants},
 		GetVariant:       currapp.GetVariant{Variants: variants},
 		UpdateVariant:    currapp.UpdateVariant{Variants: variants},
+		CloneVariant:     currapp.CloneVariant{Variants: variants},
 		DeleteVariant:    currapp.DeleteVariant{Variants: variants},
 		AssignModule: currapp.AssignModule{
 			Modules: modules, Lessons: lessons, Variants: variants, Assignments: assignments,
-			Groups: currinfra.GroupsAdapter{Groups: groupsRepo}, Attempts: issuer,
+			Groups: groupsAdapter, Attempts: issuer,
 		},
 		ListMyModules: currapp.ListMyModules{
 			Modules: modules, Lessons: lessons, Variants: variants, Assignments: assignments,

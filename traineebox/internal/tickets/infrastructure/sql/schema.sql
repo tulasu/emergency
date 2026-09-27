@@ -8,7 +8,7 @@ CREATE TABLE variants (
 
 CREATE TABLE tickets (
     id UUID PRIMARY KEY,
-    variant_id UUID NOT NULL,
+    variant_id UUID NULL,
     topic_id UUID NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
@@ -51,6 +51,7 @@ CREATE TABLE ticket_attempts (
     granted_by UUID NOT NULL,
     attempt_no INT NOT NULL,
     status TEXT NOT NULL,
+    available_from TIMESTAMPTZ NULL,
     started_at TIMESTAMPTZ NULL,
     deadline_at TIMESTAMPTZ NULL,
     finished_at TIMESTAMPTZ NULL,

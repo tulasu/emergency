@@ -95,7 +95,10 @@ func (uc GetTicket) Execute(ctx context.Context, in GetTicketInput) (models.Tick
 		return models.Ticket{}, err
 	}
 	if in.Role == value_objects.AccountRoleStudent {
-		ok, err := uc.Attempts.HasAny(ctx, ticket.VariantID, in.ActorID)
+		if ticket.VariantID == nil {
+			return models.Ticket{}, errs.ErrForbidden
+		}
+		ok, err := uc.Attempts.HasAny(ctx, *ticket.VariantID, in.ActorID)
 		if err != nil {
 			return models.Ticket{}, err
 		}

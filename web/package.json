@@ -11,7 +11,10 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test --project=api-flows",
+    "test:e2e:ui": "playwright test --project=ui-flows",
+    "typecheck": "nuxi typecheck"
   },
   "dependencies": {
     "@pinia/nuxt": "^0.11.2",
@@ -22,9 +25,11 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/papaparse": "5.5.2",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2",
-    "vitest": "4.0.8"
+    "vitest": "4.0.8",
+    "vue-tsc": "3.3.11"
   }
 }

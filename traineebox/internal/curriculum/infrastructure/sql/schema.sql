@@ -37,6 +37,8 @@ CREATE TABLE modules (
     id UUID PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
+    status TEXT NOT NULL,
+    success_threshold INT NOT NULL,
     created_by UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
@@ -47,6 +49,7 @@ CREATE TABLE lessons (
     title TEXT NOT NULL,
     position INT NOT NULL,
     duration_seconds INT NULL,
+    archived_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
 
@@ -55,6 +58,8 @@ CREATE TABLE variants (
     lesson_id UUID NOT NULL,
     title TEXT NOT NULL,
     position INT NOT NULL,
+    status TEXT NOT NULL,
+    is_primary BOOLEAN NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
 
@@ -69,7 +74,7 @@ CREATE TABLE user_modules (
 
 CREATE TABLE tickets (
     id UUID PRIMARY KEY,
-    variant_id UUID NOT NULL,
+    variant_id UUID NULL,
     topic_id UUID NOT NULL
 );
 

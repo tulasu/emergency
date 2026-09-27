@@ -52,7 +52,7 @@ type ReferenceAnswerTag struct {
 
 type Ticket struct {
 	ID              uuid.UUID
-	VariantID       uuid.UUID
+	VariantID       *uuid.UUID
 	TopicID         uuid.UUID
 	Title           string
 	Body            string
@@ -60,23 +60,26 @@ type Ticket struct {
 	CreatedAt       time.Time
 	Scenario        []byte
 	ScenarioVersion string
+	AudioDigest     string
+	AudioStatus     string
 	Reference       []byte
 	Mode            string
 	Briefing        string
 }
 
 type TicketAttempt struct {
-	ID         uuid.UUID
-	VariantID  uuid.UUID
-	UserID     uuid.UUID
-	GrantedBy  uuid.UUID
-	AttemptNo  int32
-	Status     string
-	StartedAt  *time.Time
-	DeadlineAt *time.Time
-	FinishedAt *time.Time
-	Score      *int16
-	Report     []byte
+	ID            uuid.UUID
+	VariantID     uuid.UUID
+	UserID        uuid.UUID
+	GrantedBy     uuid.UUID
+	AttemptNo     int32
+	Status        string
+	AvailableFrom *time.Time
+	StartedAt     *time.Time
+	DeadlineAt    *time.Time
+	FinishedAt    *time.Time
+	Score         *int16
+	Report        []byte
 }
 
 type TicketReferenceAnswer struct {

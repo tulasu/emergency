@@ -20,16 +20,21 @@ type API struct {
 	createModule     application.CreateModule
 	listModules      application.ListModules
 	getModule        application.GetModule
+	getModuleSummary application.GetModuleSummary
 	updateModule     application.UpdateModule
 	deleteModule     application.DeleteModule
 	createLesson     application.CreateLesson
 	listLessons      application.ListLessons
+	listLessonsPool  application.ListLessonsPool
+	copyLessonPool   application.CopyLessonFromPool
+	archiveLesson    application.ArchiveLesson
 	updateLesson     application.UpdateLesson
 	deleteLesson     application.DeleteLesson
 	createVariant    application.CreateVariant
 	listVariants     application.ListVariants
 	getVariant       application.GetVariant
 	updateVariant    application.UpdateVariant
+	cloneVariant     application.CloneVariant
 	deleteVariant    application.DeleteVariant
 	assignModule     application.AssignModule
 	listMyModules    application.ListMyModules
@@ -54,16 +59,21 @@ type Deps struct {
 	CreateModule     application.CreateModule
 	ListModules      application.ListModules
 	GetModule        application.GetModule
+	GetModuleSummary application.GetModuleSummary
 	UpdateModule     application.UpdateModule
 	DeleteModule     application.DeleteModule
 	CreateLesson     application.CreateLesson
 	ListLessons      application.ListLessons
+	ListLessonsPool  application.ListLessonsPool
+	CopyLessonPool   application.CopyLessonFromPool
+	ArchiveLesson    application.ArchiveLesson
 	UpdateLesson     application.UpdateLesson
 	DeleteLesson     application.DeleteLesson
 	CreateVariant    application.CreateVariant
 	ListVariants     application.ListVariants
 	GetVariant       application.GetVariant
 	UpdateVariant    application.UpdateVariant
+	CloneVariant     application.CloneVariant
 	DeleteVariant    application.DeleteVariant
 	AssignModule     application.AssignModule
 	ListMyModules    application.ListMyModules
@@ -89,16 +99,21 @@ func NewAPI(deps Deps) *API {
 		createModule:     deps.CreateModule,
 		listModules:      deps.ListModules,
 		getModule:        deps.GetModule,
+		getModuleSummary: deps.GetModuleSummary,
 		updateModule:     deps.UpdateModule,
 		deleteModule:     deps.DeleteModule,
 		createLesson:     deps.CreateLesson,
 		listLessons:      deps.ListLessons,
+		listLessonsPool:  deps.ListLessonsPool,
+		copyLessonPool:   deps.CopyLessonPool,
+		archiveLesson:    deps.ArchiveLesson,
 		updateLesson:     deps.UpdateLesson,
 		deleteLesson:     deps.DeleteLesson,
 		createVariant:    deps.CreateVariant,
 		listVariants:     deps.ListVariants,
 		getVariant:       deps.GetVariant,
 		updateVariant:    deps.UpdateVariant,
+		cloneVariant:     deps.CloneVariant,
 		deleteVariant:    deps.DeleteVariant,
 		assignModule:     deps.AssignModule,
 		listMyModules:    deps.ListMyModules,

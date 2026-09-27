@@ -33,3 +33,21 @@ func (a GroupsAdapter) FindByID(ctx context.Context, id uuid.UUID) (repositories
 	}
 	return repositories.GroupView{ID: g.ID, Members: members}, nil
 }
+
+func (a GroupsAdapter) UserIDsByGroup(ctx context.Context, groupID uuid.UUID) ([]uuid.UUID, error) {
+	g, err := a.Groups.FindByID(ctx, groupID)
+	if err != nil {
+		if errors.Is(err, groupserrs.ErrNotFound) {
+			return nil, errs.ErrNotFound
+		}
+		if errors.Is(err, groupserrs.ErrForbidden) {
+			return nil, errs.ErrForbidden
+		}
+		return nil, err
+	}
+	ids := make([]uuid.UUID, 0, len(g.Members))
+	for _, m := range g.Members {
+		ids = append(ids, m.UserID)
+	}
+	return ids, nil
+}

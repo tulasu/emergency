@@ -96,6 +96,27 @@ watch(
   color: var(--color-danger);
 }
 
+.tb-btn--icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text);
+  border-color: transparent;
+}
+
+.tb-btn--icon:hover:not(:disabled) {
+  background: var(--color-secondary);
+}
+
+.tb-btn__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  white-space: nowrap;
+}
+
 .tb-btn__label--hidden {
   visibility: hidden;
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ArticleAttachment struct {
@@ -30,20 +31,23 @@ type Lesson struct {
 	Title           string
 	Position        int32
 	DurationSeconds *int32
+	ArchivedAt      *time.Time
 	CreatedAt       time.Time
 }
 
 type Module struct {
-	ID          uuid.UUID
-	Title       string
-	Description string
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
+	ID               uuid.UUID
+	Title            string
+	Description      string
+	Status           string
+	SuccessThreshold int32
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
 }
 
 type Ticket struct {
 	ID        uuid.UUID
-	VariantID uuid.UUID
+	VariantID pgtype.UUID
 	TopicID   uuid.UUID
 }
 
@@ -88,5 +92,7 @@ type Variant struct {
 	LessonID  uuid.UUID
 	Title     string
 	Position  int32
+	Status    string
+	IsPrimary bool
 	CreatedAt time.Time
 }

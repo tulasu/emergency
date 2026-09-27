@@ -3,8 +3,10 @@ package presentation
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"traineebox/internal/tickets/application"
+	"traineebox/internal/tickets/domain/errs"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -18,14 +20,18 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{OperationID: "list-emergency-services", Method: http.MethodGet, Path: "/catalog/services", Summary: "List emergency services", Tags: []string{"Catalog"}, Security: sec}, a.listServicesHandler)
 	huma.Register(api, huma.Operation{OperationID: "recommend-services", Method: http.MethodGet, Path: "/catalog/recommend", Summary: "Recommend services", Tags: []string{"Catalog"}, Security: sec}, a.recommendServicesHandler)
 
+	huma.Register(api, huma.Operation{OperationID: "list-library-tickets", Method: http.MethodGet, Path: "/tickets", Summary: "List library tickets", Tags: []string{"Tickets"}, Security: sec}, a.listLibraryTicketsHandler)
+	huma.Register(api, huma.Operation{OperationID: "create-library-ticket", Method: http.MethodPost, Path: "/tickets", Summary: "Create library ticket", Tags: []string{"Tickets"}, Security: sec}, a.createLibraryTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "create-ticket", Method: http.MethodPost, Path: "/variants/{variantId}/tickets", Summary: "Create ticket in variant", Tags: []string{"Tickets"}, Security: sec}, a.createTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-variant-tickets", Method: http.MethodGet, Path: "/variants/{variantId}/tickets", Summary: "List tickets in variant", Tags: []string{"Tickets"}, Security: sec}, a.listTicketsHandler)
+	huma.Register(api, huma.Operation{OperationID: "copy-ticket-from-pool", Method: http.MethodPost, Path: "/variants/{variantId}/tickets/from-pool", Summary: "Copy ticket from library pool", Tags: []string{"Tickets"}, Security: sec}, a.copyTicketFromPoolHandler)
 	huma.Register(api, huma.Operation{OperationID: "get-ticket", Method: http.MethodGet, Path: "/tickets/{ticketId}", Summary: "Get ticket", Tags: []string{"Tickets"}, Security: sec}, a.getTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "update-ticket", Method: http.MethodPatch, Path: "/tickets/{ticketId}", Summary: "Update ticket", Tags: []string{"Tickets"}, Security: sec}, a.updateTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "delete-ticket", Method: http.MethodDelete, Path: "/tickets/{ticketId}", Summary: "Delete ticket", Tags: []string{"Tickets"}, Security: sec}, a.deleteTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "set-ticket-reference", Method: http.MethodPut, Path: "/tickets/{ticketId}/reference", Summary: "Set ticket reference answer", Tags: []string{"Tickets"}, Security: sec}, a.setReferenceHandler)
 
 	huma.Register(api, huma.Operation{OperationID: "grant-attempt", Method: http.MethodPost, Path: "/users/{userId}/attempts", Summary: "Grant attempt to user", Tags: []string{"Attempts"}, Security: sec}, a.grantAttemptHandler)
+	huma.Register(api, huma.Operation{OperationID: "open-variant", Method: http.MethodPost, Path: "/variants/{variantId}/open", Summary: "Open variant for users/groups/module", Tags: []string{"Attempts"}, Security: sec}, a.openVariantHandler)
 	huma.Register(api, huma.Operation{OperationID: "start-attempt", Method: http.MethodPost, Path: "/attempts/{attemptId}/start", Summary: "Start granted attempt", Tags: []string{"Attempts"}, Security: sec}, a.startAttemptHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-my-attempts", Method: http.MethodGet, Path: "/variants/{variantId}/attempts/mine", Summary: "List my attempts for variant", Tags: []string{"Attempts"}, Security: sec}, a.listMyAttemptsHandler)
 	huma.Register(api, huma.Operation{OperationID: "get-attempt", Method: http.MethodGet, Path: "/attempts/{attemptId}", Summary: "Get attempt", Tags: []string{"Attempts"}, Security: sec}, a.getAttemptHandler)
@@ -118,6 +124,46 @@ func (a *API) recommendServicesHandler(ctx context.Context, in *struct {
 	}{ServiceCodes: codes}}, nil
 }
 
+func (a *API) listLibraryTicketsHandler(ctx context.Context, in *struct {
+	Authorization string `header:"Authorization"`
+	Q             string `query:"q"`
+}) (*struct{ Body []ticketDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	tickets, err := a.listLibraryTickets.Execute(ctx, user.Role, in.Q)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]ticketDTO, 0, len(tickets))
+	for _, t := range tickets {
+		out = append(out, toTicketDTO(t))
+	}
+	return &struct{ Body []ticketDTO }{Body: out}, nil
+}
+
+func (a *API) createLibraryTicketHandler(ctx context.Context, in *struct {
+	Authorization string `header:"Authorization"`
+	Body          struct {
+		TopicID uuid.UUID `json:"topic_id" format:"uuid"`
+		Title   string    `json:"title" minLength:"1" maxLength:"256"`
+		Body    string    `json:"body"`
+	}
+}) (*struct{ Body ticketDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	ticket, err := a.createLibraryTicket.Execute(ctx, application.CreateLibraryTicketInput{
+		ActorID: user.ID, Role: user.Role, TopicID: in.Body.TopicID, Title: in.Body.Title, Body: in.Body.Body,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body ticketDTO }{Body: toTicketDTO(ticket)}, nil
+}
+
 func (a *API) createTicketHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	VariantID     uuid.UUID `path:"variantId"`
@@ -133,6 +179,26 @@ func (a *API) createTicketHandler(ctx context.Context, in *struct {
 	}
 	ticket, err := a.createTicket.Execute(ctx, application.CreateTicketInput{
 		ActorID: user.ID, Role: user.Role, VariantID: in.VariantID, TopicID: in.Body.TopicID, Title: in.Body.Title, Body: in.Body.Body,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body ticketDTO }{Body: toTicketDTO(ticket)}, nil
+}
+
+func (a *API) copyTicketFromPoolHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	VariantID     uuid.UUID `path:"variantId"`
+	Body          struct {
+		TicketID uuid.UUID `json:"ticket_id" format:"uuid"`
+	}
+}) (*struct{ Body ticketDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	ticket, err := a.copyTicketFromPool.Execute(ctx, application.CopyTicketFromPoolInput{
+		ActorID: user.ID, Role: user.Role, VariantID: in.VariantID, TicketID: in.Body.TicketID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -245,20 +311,88 @@ func (a *API) grantAttemptHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	UserID        uuid.UUID `path:"userId"`
 	Body          struct {
-		VariantID uuid.UUID `json:"variant_id" format:"uuid"`
+		VariantID     uuid.UUID `json:"variant_id" format:"uuid"`
+		AvailableFrom *string   `json:"available_from,omitempty"`
+		DeadlineAt    *string   `json:"deadline_at,omitempty"`
 	}
 }) (*struct{ Body attemptDTO }, error) {
 	user, err := a.requireSignedIn(ctx, in.Authorization)
 	if err != nil {
 		return nil, err
 	}
+	availableFrom, err := parseOptionalRFC3339(in.Body.AvailableFrom)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	deadlineAt, err := parseOptionalRFC3339(in.Body.DeadlineAt)
+	if err != nil {
+		return nil, mapError(err)
+	}
 	attempt, err := a.grantAttempt.Execute(ctx, application.GrantAttemptInput{
 		ActorID: user.ID, Role: user.Role, UserID: in.UserID, VariantID: in.Body.VariantID,
+		AvailableFrom: availableFrom, DeadlineAt: deadlineAt,
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return &struct{ Body attemptDTO }{Body: toAttemptDTO(attempt)}, nil
+}
+
+func (a *API) openVariantHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	VariantID     uuid.UUID `path:"variantId"`
+	Body          struct {
+		Mode          string      `json:"mode" minLength:"1"`
+		ModuleID      *uuid.UUID  `json:"module_id,omitempty" format:"uuid"`
+		GroupIDs      []uuid.UUID `json:"group_ids,omitempty"`
+		UserIDs       []uuid.UUID `json:"user_ids,omitempty"`
+		AvailableFrom *string     `json:"available_from,omitempty"`
+		DeadlineAt    *string     `json:"deadline_at,omitempty"`
+	}
+}) (*struct {
+	Body struct {
+		Granted int `json:"granted"`
+	}
+}, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	availableFrom, err := parseOptionalRFC3339(in.Body.AvailableFrom)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	deadlineAt, err := parseOptionalRFC3339(in.Body.DeadlineAt)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	n, err := a.openVariant.Execute(ctx, application.OpenVariantInput{
+		ActorID: user.ID, Role: user.Role, VariantID: in.VariantID,
+		Mode: in.Body.Mode, ModuleID: in.Body.ModuleID, GroupIDs: in.Body.GroupIDs, UserIDs: in.Body.UserIDs,
+		AvailableFrom: availableFrom, DeadlineAt: deadlineAt,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct {
+		Body struct {
+			Granted int `json:"granted"`
+		}
+	}{Body: struct {
+		Granted int `json:"granted"`
+	}{Granted: n}}, nil
+}
+
+func parseOptionalRFC3339(s *string) (*time.Time, error) {
+	if s == nil || *s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return nil, errs.ErrInvalidInput
+	}
+	utc := t.UTC()
+	return &utc, nil
 }
 
 func (a *API) startAttemptHandler(ctx context.Context, in *struct {

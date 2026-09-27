@@ -8,13 +8,13 @@ INSERT INTO tickets (
 
 -- name: GetTicketByID :one
 SELECT id, variant_id, topic_id, title, body, created_by, created_at,
-       scenario, scenario_version, reference, mode, briefing
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
 FROM tickets
 WHERE id = $1;
 
 -- name: ListTicketsByVariant :many
 SELECT id, variant_id, topic_id, title, body, created_by, created_at,
-       scenario, scenario_version, reference, mode, briefing
+       scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing
 FROM tickets
 WHERE variant_id = $1
 ORDER BY created_at;
@@ -26,7 +26,12 @@ UPDATE tickets SET title = $2, body = $3, topic_id = $4 WHERE id = $1;
 DELETE FROM tickets WHERE id = $1;
 
 -- name: UpdateDialogSnapshot :execrows
-UPDATE tickets SET scenario = $2, scenario_version = $3 WHERE id = $1;
+UPDATE tickets
+SET scenario = $2, scenario_version = $3, audio_digest = $4, audio_status = $5
+WHERE id = $1;
+
+-- name: UpdateTicketAudioStatus :execrows
+UPDATE tickets SET audio_status = $3 WHERE id = $1 AND audio_digest = $2 AND (audio_status = 'pending' OR $3 = 'ready');
 
 -- name: UpsertReferenceAnswer :exec
 INSERT INTO ticket_reference_answers (

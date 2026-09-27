@@ -21,6 +21,7 @@ type FactSnapshot struct {
 	Key        string            `json:"key"`
 	Slot       string            `json:"slot"`
 	Answers    map[string]string `json:"answers"`
+	Numbers    []int64           `json:"numbers,omitempty"`
 	Requires   []string          `json:"requires,omitempty"`
 	Disclosure string            `json:"disclosure,omitempty"`
 }

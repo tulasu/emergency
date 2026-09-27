@@ -31,6 +31,12 @@ HTTP API аудиосервиса доступен на порту `8002`. `audi
 
 При ошибке Silero `audio-synth` переключается на локальную русскую нейросетевую модель `ru_RU-denis-medium` из поддерживаемого [OHF-Voice/piper1-gpl](https://github.com/OHF-Voice/piper1-gpl). Модель загружается при сборке образа, а не во время запроса; её датасет указан как CC0 в [карточке модели](https://huggingface.co/rhasspy/piper-voices/blob/main/ru/ru_RU/denis/medium/MODEL_CARD). Движок Piper распространяется под GPLv3. Голос fallback — Denis независимо от выбранного голоса Silero: это аварийное воспроизведение речи, не совпадающее по тембру с основным голосом.
 
+## Интеграция аудио
+
+TraineeBox отправляет сценарии в `config.audio.traineebox_audio_url` (`http://audio:8002` по умолчанию), а dialog читает манифесты и WAV через `config.audio.dialog_audio_url` (`http://127.0.0.1:8002`, доступный из host network). Audio-сервис вызывает callback по `config.audio.traineebox_url`; все три адреса и общий `INTERNAL_SERVICE_TOKEN` задаются в CUE. Пустой `traineebox_audio_url` пропускает ensure; пустой `dialog_audio_url` или отказ audio оставляет звонок на живом TTS. Лимит `AUDIO_CACHE_MB` (500 МБ по умолчанию) ограничивает как память, так и WAV-кеш dialog в `/tmp/dialog-audio`; старые файлы вытесняются при загрузке новых.
+
+После обновления ID фрагментов существующие манифесты нужно перестроить: `just up` выполняет `import-scenarios` с предрендером всех билетов; при отдельном развёртывании запустите `just import-scenarios`. Повторный `ensure` обновляет манифест и при неизменном digest, если изменились ID или текст фрагментов. Пока билет не обработан, dialog использует живой TTS вместо несовпавших ID.
+
 ## Лицензия
 
 Разработано в рамках хакатона © 2026 Команда «Токеноежки»

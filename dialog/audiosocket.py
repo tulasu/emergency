@@ -9,12 +9,15 @@ import socket
 import threading
 import time
 import wave
+from pathlib import Path
 
 from dialog.core.media.asterisk import (
     _KIND_AUDIO, _KIND_ERROR, _KIND_HANGUP, _KIND_UUID, Call, MediaConfig,
     pack_audio, unpack,
 )
-from dialog.core.media.gigaam_stt import GigaAMSTT
+from dialog.core.media.audio_cache import configured as audio_configured
+from dialog.core.media.audio_cache import local as local_audio
+from dialog.core.media.audio_cache import resolve as resolve_audio
 
 from .lifecycle import WAV_KEEP, WAV_ROOT, close, entry, norm_sid
 
@@ -27,6 +30,11 @@ class _SilentSTT:
 
     def final(self) -> str:
         return ""
+
+
+def _audio_root() -> Path | None:
+    root = os.environ.get("DIALOG_AUDIO_ROOT", "").strip()
+    return Path(root) if root else None
 
 
 def audiosocket_listener(host: str = "127.0.0.1", port: int = 9001) -> None:
@@ -81,9 +89,16 @@ def _pump_one_call(conn: socket.socket, tts) -> None:
         with lock:
             out.extend(pcm)
 
-    cfg = MediaConfig(log_root=WAV_ROOT)
+    cfg = MediaConfig(log_root=WAV_ROOT, audio_root=_audio_root())
     kind_stt = GigaAMSTT() if os.environ.get("DIALOG_PROD") == "1" else _SilentSTT()
-    call = Call(sess, kind_stt, send, cfg, tts=tts)
+    call = Call(sess, kind_stt, send, cfg, tts=tts, audio=e["audio"])
+    opening_id = f"a/{sess.scenario.id}/opening.wav"
+    opening = (resolve_audio(e["audio"], opening_id) if audio_configured()
+               else local_audio(opening_id, cfg.audio_root))
+    if opening is None and tts is not None:
+        opening = tts(sess.opening())
+    if opening is not None:
+        send(opening)
     stats = {"rx": 0, "tx": 0, "rx_at": time.monotonic(), "send_ms": 0.0}
 
     wt = threading.Thread(target=_writer_thread, args=(call, conn, out, done, stats, lock),

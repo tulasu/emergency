@@ -12,6 +12,11 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu13
     "torch==2.14.0" "torchaudio==2.14.0"
 RUN pip install --no-cache-dir "numpy>=2.0" "piper-tts==1.6.1"
 RUN python -m piper.download_voices --download-dir /opt/piper ru_RU-denis-medium
+RUN mkdir -p dialog/core/media
+COPY dialog/__init__.py ./dialog/__init__.py
+COPY dialog/core/__init__.py ./dialog/core/__init__.py
+COPY dialog/core/media/__init__.py ./dialog/core/media/__init__.py
+COPY dialog/core/media/speakable.py ./dialog/core/media/speakable.py
 COPY audio-synth/ ./
 ENV PYTHONUNBUFFERED=1 \
     SYNTH_PORT=8003 \

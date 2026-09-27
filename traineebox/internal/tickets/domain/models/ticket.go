@@ -18,6 +18,8 @@ type Ticket struct {
 	CreatedAt       time.Time
 	ScenarioJSON    string
 	ScenarioVersion string
+	AudioDigest     string
+	AudioStatus     string
 	Mode            string
 	Briefing        string
 	Reference       string
@@ -25,13 +27,14 @@ type Ticket struct {
 
 func NewTicket(variantID, topicID uuid.UUID, title value_objects.TicketTitle, body string, createdBy uuid.UUID) Ticket {
 	return Ticket{
-		ID:        uuid.New(),
-		VariantID: variantID,
-		TopicID:   topicID,
-		Title:     title,
-		Body:      body,
-		CreatedBy: createdBy,
-		CreatedAt: time.Now().UTC(),
+		ID:          uuid.New(),
+		VariantID:   variantID,
+		TopicID:     topicID,
+		Title:       title,
+		Body:        body,
+		CreatedBy:   createdBy,
+		CreatedAt:   time.Now().UTC(),
+		AudioStatus: "none",
 	}
 }
 

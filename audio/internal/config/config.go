@@ -22,6 +22,7 @@ type Config struct {
 	Voice              string
 	Rate               int
 	SynthURL           string
+	TraineeBoxURL      string
 	InternalToken      string
 	SweepInterval      time.Duration
 	SweepLimit         int
@@ -77,6 +78,7 @@ func Load() (Config, error) {
 		Voice:              getenv("AUDIO_VOICE", "kseniya"),
 		Rate:               getint("AUDIO_RATE", 8000),
 		SynthURL:           strings.TrimSuffix(getenv("AUDIO_SYNTH_URL", "http://audio-synth:8003"), "/"),
+		TraineeBoxURL:      strings.TrimSuffix(strings.TrimSpace(os.Getenv("TRAINEEBOX_URL")), "/"),
 		InternalToken:      os.Getenv("INTERNAL_SERVICE_TOKEN"),
 		SweepInterval:      getdur("AUDIO_SWEEP_MINUTES", 10*time.Minute),
 		SweepLimit:         getint("AUDIO_SWEEP_LIMIT", 500),

@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
+	"traineebox/internal/audio"
 	"traineebox/internal/auth/application"
 	authinfra "traineebox/internal/auth/infrastructure"
 	authpresentation "traineebox/internal/auth/presentation"
@@ -26,10 +29,6 @@ import (
 	ticketsapp "traineebox/internal/tickets/application"
 	ticketsinfra "traineebox/internal/tickets/infrastructure"
 	ticketspresentation "traineebox/internal/tickets/presentation"
-
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/go-chi/chi/v5"
 )
 
 var version = "dev"
@@ -89,6 +88,7 @@ func main() {
 	}
 	catalogRepo := ticketsinfra.NewCatalogRepository(cat)
 	ticketsRepo := ticketsinfra.NewTicketRepository(pool)
+	audioClient := audio.Client{BaseURL: cfg.AudioURL, ServiceToken: os.Getenv("INTERNAL_SERVICE_TOKEN")}
 	attemptsRepo := ticketsinfra.NewAttemptRepository(pool)
 	currStore := currinfra.NewStore(pool)
 	topics := currinfra.Topics{Store: currStore}
@@ -113,7 +113,7 @@ func main() {
 		ListTicketsByVariant: ticketsapp.ListTicketsByVariant{Tickets: ticketsRepo, Attempts: attemptsRepo},
 		GetTicket:            ticketsapp.GetTicket{Tickets: ticketsRepo, Attempts: attemptsRepo},
 		UpdateTicket:         ticketsapp.UpdateTicket{Tickets: ticketsRepo, Curriculum: lookup},
-		DeleteTicket:         ticketsapp.DeleteTicket{Tickets: ticketsRepo},
+		DeleteTicket:         ticketsapp.DeleteTicket{Tickets: ticketsRepo, Audio: audioClient},
 		SetReferenceAnswer:   setReferenceUC,
 		GrantAttempt:         ticketsapp.GrantAttempt{Attempts: attemptsRepo, Curriculum: lookup},
 		StartAttempt:         ticketsapp.StartAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo, Curriculum: lookup},
@@ -197,7 +197,7 @@ func main() {
 	currpresentation.Register(api, currHandlers)
 	ticketspresentation.Register(api, ticketsHandlers)
 	genpresentation.Register(api, genHandlers)
-	wireCallsAndDialog(api, pool, authenticate, ticketsRepo, attemptsRepo, jobsRepo, genCatalog)
+	wireCallsAndDialog(api, pool, authenticate, ticketsRepo, attemptsRepo, jobsRepo, genCatalog, audioClient)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

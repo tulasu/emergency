@@ -3,7 +3,10 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"net/http"
 
+	"traineebox/internal/audio"
 	"traineebox/internal/dialog/domain/errs"
 	"traineebox/internal/dialog/domain/models"
 	"traineebox/internal/dialog/domain/repositories"
@@ -12,7 +15,13 @@ import (
 )
 
 type ScenarioStore interface {
-	Save(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version string) error
+	Save(ctx context.Context, ticketID uuid.UUID, scenarioJSON, version, digest, status string) error
+	UpdateAudioStatus(ctx context.Context, ticketID uuid.UUID, digest, status string) (bool, error)
+}
+
+type AudioEnsurer interface {
+	Configured() bool
+	EnsureWithRetry(ctx context.Context, body audio.EnsureRequest) (audio.EnsureResult, error)
 }
 
 type WorkerClient interface {
@@ -23,23 +32,81 @@ type WorkerClient interface {
 type PutScenario struct {
 	Bank  repositories.BankRepository
 	Store ScenarioStore
+	Audio AudioEnsurer
 }
 
-func (uc PutScenario) Execute(ctx context.Context, ticketID uuid.UUID, scenario []byte, version string) error {
-	if !json.Valid(scenario) {
-		return errs.ErrInvalidInput
-	}
-	slots, err := uc.Bank.ListSlotIDs(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := models.Validate(scenario, slots); err != nil {
-		return err
-	}
+type PutScenarioResult struct {
+	AudioStatus string
+}
+
+func (uc PutScenario) Execute(ctx context.Context, ticketID uuid.UUID, scenario []byte, version string, prerender bool) (PutScenarioResult, error) {
 	if uc.Store == nil {
-		return errs.ErrNotFound
+		return PutScenarioResult{}, errs.ErrNotFound
 	}
-	return uc.Store.Save(ctx, ticketID, string(scenario), version)
+	labels, err := uc.Bank.ListSlotLabels(ctx)
+	if err != nil {
+		return PutScenarioResult{}, err
+	}
+	knownSlots := make(map[string]bool, len(labels))
+	for slotID := range labels {
+		knownSlots[slotID] = true
+	}
+	canonical, err := audio.Canonicalize(scenario, knownSlots)
+	if err != nil {
+		return PutScenarioResult{}, err
+	}
+	if !prerender || canonical.Facts == 0 || uc.Audio == nil || !uc.Audio.Configured() {
+		if canonical.Facts == 0 {
+			log.Printf("audio prerender skipped for ticket %s: scenario has no facts", ticketID)
+		}
+		if err := uc.Store.Save(ctx, ticketID, string(canonical.JSON), version, "", "none"); err != nil {
+			return PutScenarioResult{}, err
+		}
+		return PutScenarioResult{AudioStatus: "none"}, nil
+	}
+	urges, err := uc.Bank.ListSlotUrges(ctx)
+	if err != nil {
+		return PutScenarioResult{}, err
+	}
+	urgeSlots := make(map[string]string, len(labels))
+	for id, label := range labels {
+		urgeSlots[id] = label
+		if urges[id] != "" {
+			urgeSlots[id] = urges[id]
+		}
+	}
+	if err := uc.Store.Save(ctx, ticketID, string(canonical.JSON), version, canonical.Digest, "pending"); err != nil {
+		return PutScenarioResult{}, err
+	}
+	go uc.ensure(ticketID, canonical, labels, urgeSlots)
+	return PutScenarioResult{AudioStatus: "pending"}, nil
+}
+
+func (uc PutScenario) ensure(ticketID uuid.UUID, canonical audio.CanonicalScenario, labels, urgeSlots map[string]string) {
+	result, err := uc.Audio.EnsureWithRetry(context.Background(), audio.EnsureRequest{
+		TicketID: ticketID, ScenarioDigest: canonical.Digest, Scenario: canonical.JSON, Slots: labels, UrgeSlots: urgeSlots,
+	})
+	if err != nil {
+		if _, updateErr := uc.Store.UpdateAudioStatus(context.Background(), ticketID, canonical.Digest, "stale"); updateErr != nil {
+			log.Printf("audio ensure failed for ticket %s: %v (status update: %v)", ticketID, err, updateErr)
+			return
+		}
+		log.Printf("audio ensure failed for ticket %s: %v", ticketID, err)
+		return
+	}
+	if result.StatusCode == http.StatusAccepted && result.Status == "pending" {
+		return
+	}
+	status := "stale"
+	if result.Status == "error" {
+		status = "error"
+	}
+	if (result.StatusCode == http.StatusOK || result.StatusCode == http.StatusAccepted) && result.Status == "ready" {
+		status = "ready"
+	}
+	if _, err := uc.Store.UpdateAudioStatus(context.Background(), ticketID, canonical.Digest, status); err != nil {
+		log.Printf("audio status update failed for ticket %s: %v", ticketID, err)
+	}
 }
 
 type ReloadBank struct {

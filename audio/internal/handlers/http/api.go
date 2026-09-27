@@ -76,6 +76,7 @@ type ensureReq struct {
 	ScenarioDigest string            `json:"scenario_digest"`
 	Scenario       json.RawMessage   `json:"scenario"`
 	Slots          map[string]string `json:"slots"`
+	UrgeSlots      map[string]string `json:"urge_slots"`
 	Voice          string            `json:"voice"`
 }
 
@@ -118,7 +119,7 @@ func (a *API) ensure(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	frags := domain.Enumerate(sc, in.Slots, renderFixture.Generic, renderFixture.Slowdown, renderFixture.Urge)
+	frags := domain.Enumerate(sc, in.Slots, in.UrgeSlots, renderFixture.Generic, renderFixture.Slowdown, renderFixture.Urge)
 	sums := make([][32]byte, len(frags))
 	for i, f := range frags {
 		sums[i] = hash.Texthash(hash.Normalize(f.Text), voice, a.cfg.Rate, hash.Model)

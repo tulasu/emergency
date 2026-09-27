@@ -34,6 +34,42 @@ func (r *BankRepository) ListSlotIDs(ctx context.Context) (map[string]bool, erro
 	return out, rows.Err()
 }
 
+func (r *BankRepository) ListSlotLabels(ctx context.Context) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, label FROM dialog_slots`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	slots := map[string]string{}
+	for rows.Next() {
+		var id, label string
+		if err := rows.Scan(&id, &label); err != nil {
+			return nil, err
+		}
+		slots[id] = label
+	}
+	return slots, rows.Err()
+}
+
+func (r *BankRepository) ListSlotUrges(ctx context.Context) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT slot_id, question FROM slot_questions WHERE source = 'urge' ORDER BY slot_id, question`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	urges := map[string]string{}
+	for rows.Next() {
+		var id, urge string
+		if err := rows.Scan(&id, &urge); err != nil {
+			return nil, err
+		}
+		if _, exists := urges[id]; !exists && urge != "" {
+			urges[id] = urge
+		}
+	}
+	return urges, rows.Err()
+}
+
 func (r *BankRepository) ReplaceBank(ctx context.Context, version string, slots map[string]string, questions map[string][]string) error {
 	if version == "" {
 		return fmt.Errorf("bank version required")
@@ -48,10 +84,14 @@ func (r *BankRepository) ReplaceBank(ctx context.Context, version string, slots 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, `DELETE FROM slot_questions`); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM slot_questions WHERE source <> 'urge'`); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM dialog_slots`); err != nil {
+	slotIDs := make([]string, 0, len(slots))
+	for id := range slots {
+		slotIDs = append(slotIDs, id)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM dialog_slots WHERE NOT (id = ANY($1::text[]))`, slotIDs); err != nil {
 		return err
 	}
 	for id, label := range slots {
@@ -63,7 +103,8 @@ func (r *BankRepository) ReplaceBank(ctx context.Context, version string, slots 
 			}
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO dialog_slots (id, label, family) VALUES ($1, $2, $3)`,
+			`INSERT INTO dialog_slots (id, label, family) VALUES ($1, $2, $3)
+			 ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, family = EXCLUDED.family`,
 			id, label, family); err != nil {
 			return err
 		}

@@ -7,9 +7,14 @@ import (
 	"audio/pkg/hash"
 	"audio/pkg/s3"
 	"audio/pkg/wav"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"regexp"
 	"time"
 )
@@ -32,16 +37,24 @@ func trunc(s string, n int) string {
 
 // Worker drives synth_queue → audio-synth → S3 → blobs/refs/manifest.
 type Worker struct {
-	cfg   config.Config
-	store *repositories.Store
-	s3    *s3.Client
-	synth *SynthClient
-	stats *Stats
+	cfg      config.Config
+	store    *repositories.Store
+	s3       *s3.Client
+	synth    *SynthClient
+	stats    *Stats
+	callback *readyCallback
 }
 
 // NewWorker builds the queue worker.
 func NewWorker(cfg config.Config, st *repositories.Store, s3c *s3.Client, sc *SynthClient, stt *Stats) *Worker {
-	return &Worker{cfg: cfg, store: st, s3: s3c, synth: sc, stats: stt}
+	return &Worker{
+		cfg:      cfg,
+		store:    st,
+		s3:       s3c,
+		synth:    sc,
+		stats:    stt,
+		callback: newReadyCallback(cfg),
+	}
 }
 
 // Loop claims jobs until ctx stops. Paused only in offline/CPU mode
@@ -109,8 +122,110 @@ func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
 			continue
 		}
 		w.stats.Observe(float64(time.Since(start).Milliseconds()))
+		if err := w.notifyReady(ctx, it.Hash); err != nil {
+			log.Printf("audio worker ready callback: %v", redact(err.Error()))
+		}
 	}
 	return true, nil
+}
+
+const (
+	readyCallbackAttempts   = 3
+	readyCallbackTimeout    = 5 * time.Second
+	readyCallbackRetryDelay = 100 * time.Millisecond
+)
+
+type readyCallback struct {
+	baseURL    string
+	token      string
+	httpClient *http.Client
+	retryDelay time.Duration
+}
+
+type readyCallbackRequest struct {
+	TicketID       string `json:"ticket_id"`
+	ScenarioDigest string `json:"scenario_digest"`
+}
+
+func newReadyCallback(cfg config.Config) *readyCallback {
+	return &readyCallback{
+		baseURL:    cfg.TraineeBoxURL,
+		token:      cfg.InternalToken,
+		httpClient: &http.Client{Timeout: readyCallbackTimeout},
+		retryDelay: readyCallbackRetryDelay,
+	}
+}
+
+// notifyReady reads all ready manifests satisfied by a committed synthesis
+// hash. The notification is intentionally best-effort: a TraineeBox outage
+// must not requeue audio.
+func (w *Worker) notifyReady(ctx context.Context, sum [32]byte) error {
+	if w.callback == nil || w.callback.baseURL == "" {
+		return nil
+	}
+	manifests, err := w.store.ReadyManifestsForHash(ctx, sum)
+	if err != nil {
+		return fmt.Errorf("load ready manifests: %w", err)
+	}
+	var callbackErr error
+	for _, manifest := range manifests {
+		if err := w.callback.notify(ctx, manifest); err != nil {
+			callbackErr = errors.Join(callbackErr, err)
+		}
+	}
+	return callbackErr
+}
+
+// notify posts only final ready manifests. Retriable transport and HTTP
+// failures are bounded and cannot affect completed synthesis work.
+func (c *readyCallback) notify(ctx context.Context, manifest repositories.Manifest) error {
+	if c.baseURL == "" || manifest.Status != "ready" {
+		return nil
+	}
+	payload, err := json.Marshal(readyCallbackRequest{
+		TicketID:       manifest.TicketID.String(),
+		ScenarioDigest: manifest.Digest,
+	})
+	if err != nil {
+		return fmt.Errorf("encode callback: %w", err)
+	}
+
+	var lastErr error
+	for attempt := range readyCallbackAttempts {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(c.retryDelay):
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			c.baseURL+"/internal/audio/ready", bytes.NewReader(payload))
+		if err != nil {
+			return fmt.Errorf("create callback request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Service-Token", c.token)
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("post callback: %w", err)
+			continue
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
+		resp.Body.Close()
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			return nil
+		}
+		lastErr = fmt.Errorf("callback returned %s", resp.Status)
+		if !retryableCallbackStatus(resp.StatusCode) {
+			return lastErr
+		}
+	}
+	return lastErr
+}
+
+func retryableCallbackStatus(status int) bool {
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
 }
 
 // Sweeper deletes orphan blobs past TTL every interval (plus manual

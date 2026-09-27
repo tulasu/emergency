@@ -20,8 +20,21 @@ type Dialer interface {
 }
 
 type DialogSessions interface {
-	Open(ctx context.Context, call models.Call, scenarioJSON string) error
+	Open(ctx context.Context, call models.Call, scenarioJSON string, audio *AudioReference) error
 	Close(ctx context.Context, sessionID string) error
+}
+
+type AudioReference struct {
+	TicketID uuid.UUID
+	Digest   string
+}
+
+type TicketSnapshot struct {
+	ScenarioID   string
+	ScenarioJSON string
+	BankDigest   string
+	AudioDigest  string
+	AudioStatus  string
 }
 
 type Service struct {
@@ -29,7 +42,7 @@ type Service struct {
 	Dialer              Dialer
 	Sessions            DialogSessions
 	LoadAttempt         func(ctx context.Context, attemptID, actorID uuid.UUID) (ticketID, userID uuid.UUID, deadline *time.Time, status string, err error)
-	LoadTicket          func(ctx context.Context, ticketID uuid.UUID) (scenarioID, scenarioJSON, bankDigest string, err error)
+	LoadTicket          func(ctx context.Context, ticketID uuid.UUID) (TicketSnapshot, error)
 	MarkAttemptTimedOut func(ctx context.Context, attemptID uuid.UUID) error
 	ResolveEndpoint     func(ctx context.Context, userID uuid.UUID) (string, error)
 }
@@ -73,11 +86,11 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (models.
 	if strings.ContainsAny(to, ",; \t\r\n") {
 		return models.Call{}, errs.ErrInvalidInput
 	}
-	scenarioID, scenarioJSON, bankDigest, err := s.LoadTicket(ctx, ticketID)
+	snapshot, err := s.LoadTicket(ctx, ticketID)
 	if err != nil {
 		return models.Call{}, fmt.Errorf("load ticket: %w", err)
 	}
-	if strings.TrimSpace(bankDigest) == "" {
+	if strings.TrimSpace(snapshot.BankDigest) == "" {
 		return models.Call{}, errs.ErrBadSnapshot
 	}
 	call := models.Call{
@@ -85,8 +98,8 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (models.
 		AttemptID:  in.AttemptID,
 		TicketID:   ticketID,
 		UserID:     userID,
-		ScenarioID: scenarioID,
-		BankDigest: bankDigest,
+		ScenarioID: snapshot.ScenarioID,
+		BankDigest: snapshot.BankDigest,
 		Status:     value_objects.StatusOriginating,
 	}
 	if err := s.Calls.Create(ctx, call); err != nil {
@@ -96,7 +109,11 @@ func (s *Service) RequestCall(ctx context.Context, in RequestCallInput) (models.
 		_ = s.Calls.SetStatus(ctx, call.ID, value_objects.StatusFailed)
 		return models.Call{}, err
 	}
-	if err := s.Sessions.Open(ctx, call, scenarioJSON); err != nil {
+	var audio *AudioReference
+	if snapshot.AudioStatus == "ready" && strings.TrimSpace(snapshot.AudioDigest) != "" {
+		audio = &AudioReference{TicketID: ticketID, Digest: snapshot.AudioDigest}
+	}
+	if err := s.Sessions.Open(ctx, call, snapshot.ScenarioJSON, audio); err != nil {
 		return fail(err)
 	}
 	channelID, err := s.Dialer.Originate(to, call.ID.String())

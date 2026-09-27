@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Digits → words for TTS (Silero drops digits silently).
-
-Vendored copy of dispatcher/tools/synth_audio.py speakable/_say_digits
-(spec 07 rollout A moves dialog to dialog/core/media/speakable.py; then
-audio-synth and dialog import that module instead of this copy).
-Any change here MUST be mirrored there: synth/hash parity depends on it.
-"""
+"""Text normalization shared by live and offline Silero synthesis."""
 
 from __future__ import annotations
 
@@ -35,6 +29,23 @@ def _say999(n: int) -> str:
     return " ".join(words)
 
 
+def _say_thousands(n: int) -> str:
+    k, r = divmod(n, 1000)
+    head = {1: "одна", 2: "две"}.get(k % 10) if k % 100 not in (11, 12) else None
+    kw = _say999(k)
+    if k == 1:
+        return "тысяча" + (f" {_say999(r)}" if r else "")
+    if head:
+        kw = kw.rsplit(" ", 1)[0] + " " + head if " " in kw else head
+    if k % 10 == 1 and k % 100 != 11:
+        form = "тысяча"
+    elif k % 10 in (2, 3, 4) and k % 100 not in (12, 13, 14):
+        form = "тысячи"
+    else:
+        form = "тысяч"
+    return f"{kw} {form}" + (f" {_say999(r)}" if r else "")
+
+
 def _say_digits(m: re.Match) -> str:
     d = m.group(0)
     if len(d) >= 5:  # телефон/код: как диктуют — 3-3-2-2, ведущие нули цифрами
@@ -56,26 +67,9 @@ def _say_digits(m: re.Match) -> str:
     return ", ".join(out)
 
 
-def _say_thousands(n: int) -> str:
-    k, r = divmod(n, 1000)
-    head = {1: "одна", 2: "две"}.get(k % 10) if k % 100 not in (11, 12) else None
-    kw = _say999(k)
-    if k == 1:
-        return "тысяча" + (f" {_say999(r)}" if r else "")
-    if head:
-        kw = kw.rsplit(" ", 1)[0] + " " + head if " " in kw else head
-    if k % 10 == 1 and k % 100 != 11:
-        form = "тысяча"
-    elif k % 10 in (2, 3, 4) and k % 100 not in (12, 13, 14):
-        form = "тысячи"
-    else:
-        form = "тысяч"
-    return f"{kw} {form}" + (f" {_say999(r)}" if r else "")
-
-
 def speakable(text: str) -> str:
-    """Silero не читает цифры — переводим в слова."""
-    # «916 896 3254», «903-226-13-83» — один номер, склеиваем перед группировкой
+    """Silero does not pronounce digits, so replace them with spoken Russian."""
+    # «916 896 3254», «903-226-13-83» — one number before grouping.
     text = re.sub(r"\d[\d \-]{5,}\d",
                   lambda m: re.sub(r"[ \-]", "", m.group(0))
                   if sum(c.isdigit() for c in m.group(0)) >= 7 else m.group(0),

@@ -20,7 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-AUDIO = Path(__file__).resolve().parents[2] / "data" / "audio"
+from .audio_cache import configured as audio_configured
+from .audio_cache import local as local_audio
+from .audio_cache import resolve
 
 # AudioSocket: 1 байт тип + 2 байта длина (big-endian) + payload.
 # Типы — из app_audiosocket: 0x00 hangup, 0x01 UUID (первый фрейм),
@@ -45,9 +47,10 @@ class Transcriber(Protocol):
 class MediaConfig:
     vad_threshold: int = 400  # rms порог голоса, калибровать под линию
     silence_ms: int = 700  # тишины = конец фразы (600–800)
-    audio_root: Path = AUDIO
     log_root: Path | None = None  # лог фраз оператора: wav + turns.jsonl
-
+    # None keeps deployments without a bundled local audio tree from probing
+    # an imaginary data/audio directory.
+    audio_root: Path | None = None
 
 def pack_audio(slin8: bytes) -> bytes:
     return struct.pack(">BH", _KIND_AUDIO, len(slin8)) + slin8
@@ -74,30 +77,20 @@ def upsample8to16(slin8: bytes) -> bytes:
     return audioop.ratecv(slin8, 2, 1, 8000, 16000, None)[0]
 
 
-def load_reply_pcm(audio_id: str, root: Path = AUDIO) -> bytes | None:
-    """Композит 'a+b' клеится конкатенацией. Нет файлов — None, плеер
-    идёт через живой TTS по Reply.text."""
-    out = bytearray()
-    for part in audio_id.split("+"):
-        p = root / part
-        if not p.exists():
-            return None
-        with wave.open(str(p), "rb") as w:
-            assert (w.getframerate(), w.getnchannels()) == (8000, 1), p
-            out += w.readframes(w.getnframes())
-    return bytes(out)
 
 
 class Call:
     """Один звонок: фреймы из сокета -> транскрибер -> Session -> звук назад."""
 
     def __init__(self, session, transcriber: Transcriber,
-                 send, cfg: MediaConfig | None = None, tts=None):
+                 send, cfg: MediaConfig | None = None, tts=None,
+                 audio: dict[str, str] | None = None):
         self.session = session
         self.tr = transcriber
         self.send = send  # send(slin8_bytes)
         self.cfg = cfg or MediaConfig()
         self.tts = tts  # tts(text) -> slin8: ответы без предрендера (LLM вне сценария)
+        self.audio = audio or {}
         self._silent_ms = 0
         self._heard = False
         self.playing: bytes | None = None
@@ -137,18 +130,25 @@ class Call:
             utt, self._utt = bytes(self._utt), bytearray()
             self._answer(self.tr.final(), utt)
 
+    def _resolve_audio(self, fragment_id: str | None) -> bytes | None:
+        if audio_configured():
+            return resolve(self.audio, fragment_id)
+        return local_audio(fragment_id, self.cfg.audio_root)
+
     def _answer(self, text: str, utt: bytes = b"") -> None:
         if not text.strip():
             self._log(text, utt, None)  # голос был, STT не разобрал — важно для дообучения
             return
         reply = self.session.on_final(text)
-        self._log(text, utt, getattr(self.session, "turns", [None])[-1])
-        pcm = load_reply_pcm(reply.audio_id, self.cfg.audio_root) \
-            if reply.audio_id else None
+        pcm = self._resolve_audio(reply.audio_id)
+        generated = False
         if pcm is None and self.tts is not None and reply.text:
             pcm = self.tts(reply.text)
+            generated = bool(pcm)
         if pcm is None:
-            self.on_tts_text(reply.text)  # живого TTS нет — хук для шага 6
+            generated = bool(self.on_tts_text(reply.text))
+        self._log(text, utt, getattr(self.session, "turns", [None])[-1], generated)
+        if pcm is None:
             return
         self.playing = pcm
         for i in range(0, len(pcm), _FRAME * 2):
@@ -156,13 +156,12 @@ class Call:
                 break  # barge-in оборвал
             self.send(pcm[i:i + _FRAME * 2])
         self.playing = None
-
     def flush_log(self) -> None:
         """Звонок оборвался посреди фразы — сохранить недоговорённое."""
         if self._heard and self._utt:
             self._log("<оборвано> " + self.tr.final(), bytes(self._utt), None)
 
-    def _log(self, text: str, utt: bytes, turn) -> None:
+    def _log(self, text: str, utt: bytes, turn, generated: bool | None = None) -> None:
         if self.log_dir is None:
             return
         self._n += 1
@@ -182,7 +181,8 @@ class Call:
                 score=round(u.score, 3), source=u.source,
                 reveal=d.reveal, style=str(d.style),
                 reply=r.text, audio_id=r.audio_id,
-                generated=r.audio_id is None and bool(r.text),
+                generated=(r.audio_id is None and bool(r.text))
+                if generated is None else generated,
                 ms=round(u.latency_ms),
             )
             votes = getattr(getattr(self.session, "cascade", None), "last_votes", None)
@@ -195,8 +195,9 @@ class Call:
               f"{'[LLM] ' if rec.get('generated') else ''}{rec.get('reply', '')!r}",
               flush=True)
 
-    def on_tts_text(self, text: str) -> None:
-        """Нет предрендера — переопределить живым TTS в проде."""
+    def on_tts_text(self, text: str) -> bool:
+        """No prerecorded audio: override only when a live TTS hook played it."""
+        return False
 
     def on_barge_in(self) -> None:
         """Голос во время playback (детектит транспорт): стоп + cancel."""

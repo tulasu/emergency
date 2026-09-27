@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"traineebox/internal/calls/application"
 	"traineebox/internal/calls/domain/errs"
 	"traineebox/internal/calls/domain/models"
 )
@@ -30,7 +31,7 @@ func (c *DialogClient) dialogBase() string {
 	return os.Getenv("DIALOG_URL")
 }
 
-func (c *DialogClient) Open(ctx context.Context, call models.Call, scenarioJSON string) error {
+func (c *DialogClient) Open(ctx context.Context, call models.Call, scenarioJSON string, audio *application.AudioReference) error {
 	base := strings.TrimSpace(c.dialogBase())
 	if base == "" {
 		return fmt.Errorf("dialog worker not configured (DIALOG_URL)")
@@ -38,14 +39,21 @@ func (c *DialogClient) Open(ctx context.Context, call models.Call, scenarioJSON 
 	if !json.Valid([]byte(scenarioJSON)) || strings.TrimSpace(scenarioJSON) == "" {
 		return errs.ErrBadSnapshot
 	}
-	body, _ := json.Marshal(map[string]any{
+	body := map[string]any{
 		"session_id":  call.ID.String(),
 		"scenario":    json.RawMessage(scenarioJSON),
 		"bank_digest": call.BankDigest,
-	})
+	}
+	if audio != nil {
+		body["audio"] = map[string]string{"ticket_id": audio.TicketID.String(), "digest": audio.Digest}
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal dialog open: %w", err)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/sessions/open", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/sessions/open", bytes.NewReader(encoded))
 	if err != nil {
 		return err
 	}

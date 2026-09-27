@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"traineebox/internal/tickets/domain/abilities"
 	"traineebox/internal/tickets/domain/errs"
@@ -142,8 +143,13 @@ func (uc UpdateTicket) Execute(ctx context.Context, in UpdateTicketInput) (model
 	return ticket, nil
 }
 
+type AudioTicketDeleter interface {
+	DeleteTicket(ctx context.Context, ticketID uuid.UUID) error
+}
+
 type DeleteTicket struct {
 	Tickets repositories.TicketRepository
+	Audio   AudioTicketDeleter
 }
 
 func (uc DeleteTicket) Execute(ctx context.Context, role value_objects.AccountRole, id uuid.UUID) error {
@@ -153,7 +159,15 @@ func (uc DeleteTicket) Execute(ctx context.Context, role value_objects.AccountRo
 	if _, err := uc.Tickets.FindByID(ctx, id); err != nil {
 		return err
 	}
-	return uc.Tickets.Delete(ctx, id)
+	if err := uc.Tickets.Delete(ctx, id); err != nil {
+		return err
+	}
+	if uc.Audio != nil {
+		audioCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = uc.Audio.DeleteTicket(audioCtx, id)
+	}
+	return nil
 }
 
 type SetReferenceAnswer struct {

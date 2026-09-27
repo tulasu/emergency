@@ -31,6 +31,7 @@ type demoOptions struct {
 	attemptFile      string
 	deadlineHours    int
 	scenarioSource   string
+	prerender        bool
 }
 
 func newSeedDemoCmd(cfg config.Config) *cobra.Command {
@@ -50,6 +51,7 @@ func newSeedDemoCmd(cfg config.Config) *cobra.Command {
 	cmd.Flags().StringVar(&opts.attemptFile, "attempt-file", "/tmp/seed-demo-attempt-id", "ephemeral path inside the run-container; printed in summary so `just call` can take it as $2")
 	cmd.Flags().IntVar(&opts.deadlineHours, "deadline-hours", 24, "attempt deadline in hours from now")
 	cmd.Flags().StringVar(&opts.scenarioSource, "scenario-source", "data/scenarios/bilet01_call01.json", "corpus scenario to base the demo on (relative to embed root)")
+	cmd.Flags().BoolVar(&opts.prerender, "prerender", true, "ensure audio for the persisted demo ticket snapshot")
 	return cmd
 }
 
@@ -149,6 +151,11 @@ func seedDemo(ctx context.Context, cfg config.Config, opts demoOptions) error {
 	// ponytail: single 2-attempt call, no partial fan-out retry.
 	if err := bankReload(ctx, cfg.HTTPAddr, os.Getenv("INTERNAL_SERVICE_TOKEN")); err != nil {
 		fmt.Fprintf(os.Stderr, "warn: bank reload failed (attempt may use stale digest): %v\n", err)
+	}
+	if opts.prerender {
+		if err := prerenderTicket(ctx, pool, cfg, ticketID); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: audio prerender ticket %s: %v\n", ticketID, err)
+		}
 	}
 	// 5. Current canon digest (recomputed by reload's ReplaceBank).
 	_, digest, err := dialoginfra.NewBankRepository(pool).BankVersion(ctx)

@@ -1,0 +1,2 @@
+FROM dispatcher-python:latest
+RUN pip install --no-cache-dir "peft==0.21.0" "bitsandbytes==0.50.2" "accelerate==1.15.0"

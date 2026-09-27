@@ -1,6 +1,6 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
-# единый compose: postgres + traineebox + dialog + ticketgen + asterisk + caddy
+# единый compose: инфраструктура, приложение и аудиосервисы
 root_compose := "docker-compose.yml"
 asterisk_compose := "config/asterisk/docker-compose.yml"
 
@@ -12,7 +12,9 @@ default:
 generate:
     cue export -f -e compose --outfile {{root_compose}} config/system.cue config/dev.cue
 
-# всё из одной точки: инфра + миграции + seed-admin
+# всё из одной точки: инфра + миграции + seed-admin.
+# Аудиосервис запускается только после compose-зависимости
+# audio-postgres → audio-migrate → audio; отдельный запуск миграции не нужен.
 # --build обязателен: иначе docker compose кэширует старый бинарь
 # initializer'а и новые подкоманды (import-bank/import-scenarios/seed-demo)
 # будут unknown command.

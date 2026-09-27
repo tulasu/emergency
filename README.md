@@ -17,6 +17,19 @@
 - [`traineebox/`](traineebox/) — backend на Go: API, сессии, билеты, попытки, старт звонка через ARI
 - [`dialog/`](dialog/) — голосовой движок на Python: STT/TTS, NLU, сценарий заявителя по AudioSocket
 - [`ticketgen/`](ticketgen/) — AI-пайплайн на Python: черновики учебных сценариев из каталога и LLM
+- [`audio/`](audio/) — сервис синтеза и кэширования аудиофрагментов; [`audio-synth/`](audio-synth/) — его внутренний GPU-синтезатор.
+
+В Go-модуле `audio/` точка сборки — `cmd/audio`; `internal/handlers/http` отвечает за HTTP, `internal/services` — за worker и синтез, `internal/repositories` — за PostgreSQL, `internal/domain` — за проверку сценария и фрагменты. Конфигурация остаётся в `internal/config`. Независимые утилиты и клиент RustFS вынесены в `pkg/hash`, `pkg/wav`, `pkg/s3`.
+
+## Запуск и обновление
+
+Для нового развёртывания используйте `just up`. Команда генерирует `docker-compose.yml` из `config/*.cue`, собирает образы и запускает аудиосервисы в порядке `audio-postgres` → `audio-migrate` → `audio`: одноразовый `audio-migrate` ждёт готовности БД и выполняет `audio migrate up`; `audio` не стартует, пока миграция не завершится успешно.
+
+Для обновления уже развёрнутой системы (включая новую миграцию) также используйте `just up`, а не ручной запуск `audio`. Обычный `docker compose restart audio` допустим только для перезапуска уже совместимого сервиса: он не выполняет миграции.
+
+HTTP API аудиосервиса доступен на порту `8002`. `audio-synth` намеренно не публикует порт на хост и доступен только другим сервисам Compose по `http://audio-synth:8003`.
+
+При ошибке Silero `audio-synth` переключается на локальную русскую нейросетевую модель `ru_RU-denis-medium` из поддерживаемого [OHF-Voice/piper1-gpl](https://github.com/OHF-Voice/piper1-gpl). Модель загружается при сборке образа, а не во время запроса; её датасет указан как CC0 в [карточке модели](https://huggingface.co/rhasspy/piper-voices/blob/main/ru/ru_RU/denis/medium/MODEL_CARD). Движок Piper распространяется под GPLv3. Голос fallback — Denis независимо от выбранного голоса Silero: это аварийное воспроизведение речи, не совпадающее по тембру с основным голосом.
 
 ## Лицензия
 

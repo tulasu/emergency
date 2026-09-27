@@ -19,6 +19,8 @@
 - [`ticketgen/`](ticketgen/) — AI-пайплайн на Python: черновики учебных сценариев из каталога и LLM
 - [`audio/`](audio/) — сервис синтеза и кэширования аудиофрагментов; [`audio-synth/`](audio-synth/) — его внутренний GPU-синтезатор.
 
+В Go-модуле `audio/` точка сборки — `cmd/audio`; `internal/handlers/http` отвечает за HTTP, `internal/services` — за worker и синтез, `internal/repositories` — за PostgreSQL, `internal/domain` — за проверку сценария и фрагменты. Конфигурация остаётся в `internal/config`. Независимые утилиты и клиент RustFS вынесены в `pkg/hash`, `pkg/wav`, `pkg/s3`.
+
 ## Запуск и обновление
 
 Для нового развёртывания используйте `just up`. Команда генерирует `docker-compose.yml` из `config/*.cue`, собирает образы и запускает аудиосервисы в порядке `audio-postgres` → `audio-migrate` → `audio`: одноразовый `audio-migrate` ждёт готовности БД и выполняет `audio migrate up`; `audio` не стартует, пока миграция не завершится успешно.

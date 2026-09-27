@@ -1,8 +1,6 @@
-// Package store is the audio PostgreSQL repository (direct pgx, no sqlc).
-// Invariant: application code NEVER writes blobs.refcount — only the
-// refs_adjust_blob_refcount trigger does (insert +1/clear flag,
-// delete −1/flag at 0). Queue PK (hash) is the cross-worker singleflight.
-package store
+// Package repositories owns audio PostgreSQL persistence (direct pgx).
+// Only the refs_adjust_blob_refcount trigger writes blobs.refcount.
+package repositories
 
 import (
 	"context"
@@ -12,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"audio/internal/enumerate"
+	"audio/internal/domain"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -60,7 +58,7 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-// New wraps pool (created by internal/postgres).
+// New wraps the audio PostgreSQL pool.
 func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 
 func hexOf(sum [32]byte) string { return hex.EncodeToString(sum[:]) }
@@ -68,7 +66,7 @@ func hexOf(sum [32]byte) string { return hex.EncodeToString(sum[:]) }
 // Ensure upserts the manifest + refs for existing blobs + queue for missing.
 // Idempotent: stored digest and voice match returns current status + missing
 // with no writes. matched reports the cache hit (caller maps ready→200).
-func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice string, frags []enumerate.Fragment, hashes [][32]byte) (status string, missing []string, matched bool, err error) {
+func (s *Store) Ensure(ctx context.Context, ticketID uuid.UUID, digest, voice string, frags []domain.Fragment, hashes [][32]byte) (status string, missing []string, matched bool, err error) {
 	fragMap := make(map[string]string, len(frags))
 	newHashes := make([][]byte, len(hashes))
 	for i, f := range frags {

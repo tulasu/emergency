@@ -3,7 +3,7 @@ package hash_test
 import (
 	"testing"
 
-	"audio/internal/hash"
+	"audio/pkg/hash"
 )
 
 // TestNormMatchesDispatcher pins the normalization shared with the

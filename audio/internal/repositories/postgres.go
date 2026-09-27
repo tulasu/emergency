@@ -1,6 +1,4 @@
-// Package postgres opens the audio pgx pool (same shape as
-// traineebox/internal/platform/postgres: MaxConns 10, 5s ping).
-package postgres
+package repositories
 
 import (
 	"context"

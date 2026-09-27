@@ -1,6 +1,4 @@
-// Package stats tracks synth latency p50/p95 in a bounded ring (spec 06
-// GET /v1/stats). Hit/miss is counted by dialog via turns.jsonl, not here.
-package stats
+package services
 
 import (
 	"sort"
@@ -13,8 +11,8 @@ type Stats struct {
 	vals []float64
 }
 
-// New builds a tracker.
-func New() *Stats { return &Stats{} }
+// NewStats builds a tracker.
+func NewStats() *Stats { return &Stats{} }
 
 // Observe records one synth call in ms.
 func (s *Stats) Observe(ms float64) {

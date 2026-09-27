@@ -15,14 +15,11 @@ import (
 	"time"
 
 	"audio/internal/config"
-	"audio/internal/httpapi"
-	"audio/internal/postgres"
-	"audio/internal/s3"
-	"audio/internal/stats"
-	"audio/internal/store"
-	"audio/internal/synth"
-	"audio/internal/worker"
+	httpapi "audio/internal/handlers/http"
+	"audio/internal/repositories"
+	"audio/internal/services"
 	"audio/migrations"
+	"audio/pkg/s3"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -46,27 +43,27 @@ func runServe() error {
 		return err
 	}
 	ctx := context.Background()
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := repositories.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	st := store.New(pool)
+	st := repositories.New(pool)
 	s3c := s3.New(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Key, cfg.S3Secret)
 	if err := s3c.EnsureBucket(ctx); err != nil {
 		log.Printf("audio: ensure bucket: %v", err)
 	}
-	stt := stats.New()
+	stt := services.NewStats()
 	api := httpapi.New(cfg, st, s3c, stt)
 	mux := http.NewServeMux()
 	api.Register(mux)
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	sc := synth.New(cfg.SynthURL, cfg.WorkerSynthTimeout)
-	go worker.New(cfg, st, s3c, sc, stt).Loop(runCtx)
-	go worker.NewSweeper(cfg, st, s3c).Loop(runCtx)
+	sc := services.NewSynthClient(cfg.SynthURL, cfg.WorkerSynthTimeout)
+	go services.NewWorker(cfg, st, s3c, sc, stt).Loop(runCtx)
+	go services.NewSweeper(cfg, st, s3c).Loop(runCtx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

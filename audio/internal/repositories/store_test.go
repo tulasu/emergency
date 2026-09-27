@@ -1,4 +1,4 @@
-package store_test
+package repositories_test
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"audio/internal/enumerate"
-	"audio/internal/hash"
-	"audio/internal/store"
+	"audio/internal/domain"
+	"audio/internal/repositories"
 	"audio/migrations"
+	"audio/pkg/hash"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,7 +20,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-func openTestDB(t *testing.T) (*store.Store, *pgxpool.Pool) {
+func openTestDB(t *testing.T) (*repositories.Store, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("AUDIO_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -45,11 +45,11 @@ func openTestDB(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	}
 	t.Cleanup(func() { pool.Close() })
 	_, _ = pool.Exec(ctx, `TRUNCATE refs, synth_queue, manifests, blobs`)
-	return store.New(pool), pool
+	return repositories.New(pool), pool
 }
 
-func testFragment(text, voice string) ([]enumerate.Fragment, [][32]byte) {
-	frags := []enumerate.Fragment{{ID: "a/t/opening.wav", Text: text}}
+func testFragment(text, voice string) ([]domain.Fragment, [][32]byte) {
+	frags := []domain.Fragment{{ID: "a/t/opening.wav", Text: text}}
 	sums := [][32]byte{hash.Texthash(hash.Normalize(text), voice, 8000, hash.Model)}
 	return frags, sums
 }
@@ -69,7 +69,7 @@ func TestEnsureFinishDeleteRefcount(t *testing.T) {
 		t.Fatal("newly inserted unreferenced blob has no orphan timestamp")
 	}
 	ticket := uuid.New()
-	frags := []enumerate.Fragment{
+	frags := []domain.Fragment{
 		{ID: "a/t/opening.wav", Text: "Алло."},
 		{ID: "a/t/x/plain.wav", Text: "Да."},
 	}
@@ -135,7 +135,7 @@ func TestClaimIsExclusiveAndFailureReleasesLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})
-	claimed := make(chan []store.QueueItem, 2)
+	claimed := make(chan []repositories.QueueItem, 2)
 	errs := make(chan error, 2)
 	for range 2 {
 		go func() {
@@ -146,7 +146,7 @@ func TestClaimIsExclusiveAndFailureReleasesLease(t *testing.T) {
 		}()
 	}
 	close(start)
-	var item store.QueueItem
+	var item repositories.QueueItem
 	count := 0
 	for range 2 {
 		if err := <-errs; err != nil {
@@ -194,7 +194,7 @@ func TestExpiredFinalLeasePoisonsAndFencesWorker(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE synth_queue SET claim_until = now() - interval '1 second' WHERE hash = $1`, sums[0][:]); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.FinishItem(ctx, items[0], 8000, 1, 1); !errors.Is(err, store.ErrClaimLost) {
+	if err := st.FinishItem(ctx, items[0], 8000, 1, 1); !errors.Is(err, repositories.ErrClaimLost) {
 		t.Fatalf("late worker finish = %v, want ErrClaimLost", err)
 	}
 	recovered, err := st.Claim(ctx, 1)
@@ -338,7 +338,7 @@ func TestSweepHoldsLockUntilS3CallbackAndDelete(t *testing.T) {
 	releaseDelete := make(chan struct{})
 	sweepDone := make(chan error, 1)
 	go func() {
-		deleted, _, err := st.SweepOrphans(ctx, 0, 1, func(context.Context, store.Orphan) error {
+		deleted, _, err := st.SweepOrphans(ctx, 0, 1, func(context.Context, repositories.Orphan) error {
 			close(callbackStarted)
 			<-releaseDelete
 			return nil

@@ -1,4 +1,4 @@
-package enumerate_test
+package domain_test
 
 import (
 	"encoding/json"
@@ -8,8 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"audio/internal/enumerate"
-	"audio/internal/snapshot"
+	"audio/internal/domain"
 )
 
 type fixture struct {
@@ -77,7 +76,7 @@ func TestEnumerateParity(t *testing.T) {
 }
 
 func TestFskey(t *testing.T) {
-	if got := enumerate.Fskey("fire#1/what"); got != "fire_1_what" {
+	if got := domain.Fskey("fire#1/what"); got != "fire_1_what" {
 		t.Fatalf("fskey = %q", got)
 	}
 }
@@ -90,12 +89,12 @@ func TestEnumerateShapes(t *testing.T) {
 			{"key":"fire_what","slot":"fire.what","answers":{"plain":"Горит мусорный контейнер у дома."}},
 			{"key":"addr","slot":"addr.street","answers":{"plain":"Ленина 5.","short":"Ленина."}}
 		]}`)
-	sc, err := snapshot.Validate(raw, map[string]bool{"fire.what": true, "addr.street": true})
+	sc, err := domain.Validate(raw, map[string]bool{"fire.what": true, "addr.street": true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	slots := map[string]string{"fire.what": "что горит", "addr.street": "адрес"}
-	got := enumerate.Enumerate(sc, slots, f.Generic, f.Slowdown, f.Urge)
+	got := domain.Enumerate(sc, slots, f.Generic, f.Slowdown, f.Urge)
 	byID := map[string]string{}
 	for _, fr := range got {
 		byID[fr.ID] = fr.Text

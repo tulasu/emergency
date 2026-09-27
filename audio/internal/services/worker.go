@@ -1,14 +1,12 @@
-// Package worker drives the audio synthesis queue and orphan sweep.
-package worker
+// Package services implements audio synthesis and queue processing.
+package services
 
 import (
 	"audio/internal/config"
-	"audio/internal/hash"
-	"audio/internal/s3"
-	"audio/internal/stats"
-	"audio/internal/store"
-	"audio/internal/synth"
-	"audio/internal/wav"
+	"audio/internal/repositories"
+	"audio/pkg/hash"
+	"audio/pkg/s3"
+	"audio/pkg/wav"
 	"context"
 	"errors"
 	"log"
@@ -35,14 +33,14 @@ func trunc(s string, n int) string {
 // Worker drives synth_queue → audio-synth → S3 → blobs/refs/manifest.
 type Worker struct {
 	cfg   config.Config
-	store *store.Store
+	store *repositories.Store
 	s3    *s3.Client
-	synth *synth.Client
-	stats *stats.Stats
+	synth *SynthClient
+	stats *Stats
 }
 
-// New builds the queue worker.
-func New(cfg config.Config, st *store.Store, s3c *s3.Client, sc *synth.Client, stt *stats.Stats) *Worker {
+// NewWorker builds the queue worker.
+func NewWorker(cfg config.Config, st *repositories.Store, s3c *s3.Client, sc *SynthClient, stt *Stats) *Worker {
 	return &Worker{cfg: cfg, store: st, s3: s3c, synth: sc, stats: stt}
 }
 
@@ -63,6 +61,8 @@ func (w *Worker) Loop(ctx context.Context) {
 		if err != nil {
 			log.Printf("audio worker: %v", redact(err.Error()))
 		}
+		// TODO: replace idle polling with a wakeup on new jobs, while retaining
+		// recovery of expired claims.
 		if !drove {
 			select {
 			case <-ctx.Done():
@@ -102,7 +102,7 @@ func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
 			continue
 		}
 		if err := w.store.FinishItem(ctx, it, w.cfg.Rate, info.Bytes, info.DurS); err != nil {
-			if errors.Is(err, store.ErrClaimLost) {
+			if errors.Is(err, repositories.ErrClaimLost) {
 				continue
 			}
 			_ = w.store.FailItem(ctx, it, "db finish failed: "+trunc(redact(err.Error()), 200))
@@ -117,12 +117,12 @@ func (w *Worker) DriveOnce(ctx context.Context) (bool, error) {
 // POST /v1/sweep/run). S3 keys first, then DB rows — crash-safe order.
 type Sweeper struct {
 	cfg   config.Config
-	store *store.Store
+	store *repositories.Store
 	s3    *s3.Client
 }
 
 // NewSweeper builds the GC loop.
-func NewSweeper(cfg config.Config, st *store.Store, s3c *s3.Client) *Sweeper {
+func NewSweeper(cfg config.Config, st *repositories.Store, s3c *s3.Client) *Sweeper {
 	return &Sweeper{cfg: cfg, store: st, s3: s3c}
 }
 
@@ -145,7 +145,7 @@ func (s *Sweeper) Loop(ctx context.Context) {
 // Once runs one bounded sweep pass, keeping each blob locked through S3 deletion.
 func (s *Sweeper) Once(ctx context.Context) error {
 	n, bytes, err := s.store.SweepOrphans(ctx, 7*24*time.Hour, s.cfg.SweepLimit,
-		func(ctx context.Context, o store.Orphan) error {
+		func(ctx context.Context, o repositories.Orphan) error {
 			return s.s3.Delete(ctx, hash.S3Key(o.Voice, o.Rate, hash.Hex(o.Hash)))
 		})
 	if err != nil {

@@ -2,11 +2,11 @@
 """Export dialog render constants to JSON for the Go parity test.
 
 CI runs this against dialog/core/dialog/render.py and diffs the result with
-audio/internal/enumerate/testdata/render_fixture.json. The Go service embeds
+audio/internal/domain/testdata/render_fixture.json. The Go service embeds
 the same fixture as fallback; TestEnumerateParity fails on drift so dialog
 wording changes land in audio deliberately, not silently.
 
-Usage: python3 audio/tools/export_render_fixture.py > audio/internal/enumerate/testdata/render_fixture.json
+Usage: python3 audio/tools/export_render_fixture.py > audio/internal/domain/testdata/render_fixture.json
 """
 
 from __future__ import annotations

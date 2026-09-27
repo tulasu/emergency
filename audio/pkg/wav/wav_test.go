@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"audio/internal/wav"
+	"audio/pkg/wav"
 )
 
 func makeWav(n int) []byte {

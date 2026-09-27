@@ -1,9 +1,5 @@
-// Package snapshot validates the AD-7 snapshot canon before enumerate.
-// Go copy of traineebox/internal/dialog/validator.go (itself a mirror of
-// dialog/validator.py): 400 on drift, Fact.audio forbidden. Audio keeps the
-// manifest outside the snapshot, so the same discipline applies here.
-// knownSlots comes from the ensure request slots map (audio has no ontology).
-package snapshot
+// Package domain defines and validates audio scenario snapshots and fragments.
+package domain
 
 import (
 	"encoding/json"

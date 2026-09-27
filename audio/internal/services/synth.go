@@ -1,8 +1,5 @@
-// Package synth posts texts to the audio-synth daemon (Python/Silero).
-// Go owns data, Python is a pure stateless GPU function: POST /synth
-// {text, voice} -> wav bytes (8k mono). Retries live in the worker,
-// redaction in logs — this client only bounds the call.
-package synth
+// Package services implements audio synthesis and queue processing.
+package services
 
 import (
 	"bytes"
@@ -15,15 +12,15 @@ import (
 	"time"
 )
 
-// Client calls one audio-synth daemon.
-type Client struct {
+// SynthClient calls one audio-synth daemon.
+type SynthClient struct {
 	Base string // e.g. http://audio-synth:8003, no trailing slash
 	HTTP *http.Client
 }
 
-// New builds a client with per-call timeout.
-func New(base string, timeout time.Duration) *Client {
-	return &Client{
+// NewSynthClient builds a client with per-call timeout.
+func NewSynthClient(base string, timeout time.Duration) *SynthClient {
+	return &SynthClient{
 		Base: strings.TrimSuffix(base, "/"),
 		HTTP: &http.Client{Timeout: timeout},
 	}
@@ -36,7 +33,7 @@ type synthReq struct {
 
 // Synth synthesizes text and returns wav bytes (8k mono s16).
 // The daemon is singleflight-serialized internally (one _lock per process).
-func (c *Client) Synth(ctx context.Context, text, voice string) ([]byte, error) {
+func (c *SynthClient) Synth(ctx context.Context, text, voice string) ([]byte, error) {
 	body, _ := json.Marshal(synthReq{Text: text, Voice: voice})
 	req, err := http.NewRequestWithContext(ctx, "POST", c.Base+"/synth", bytes.NewReader(body))
 	if err != nil {
@@ -56,7 +53,7 @@ func (c *Client) Synth(ctx context.Context, text, voice string) ([]byte, error) 
 }
 
 // Check pings GET /health; non-200 is an error.
-func (c *Client) Check(ctx context.Context) error {
+func (c *SynthClient) Check(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+"/health", nil)
 	if err != nil {
 		return err

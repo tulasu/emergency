@@ -1,16 +1,9 @@
-// Package enumerate maps a snapshot canon + slots into [(frag_id, text)]
-// (spec 06). frag_id mirrors what dialog Renderer.say emits:
-// opening + facts[].answers.* + GENERIC + SLOW_DOWN + URGE over critical
-// slots. Audio never invents replies: the player concatenates fragments.
-// improv replies (audio_id=None) are never pre-recorded.
-package enumerate
+package domain
 
 import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"audio/internal/snapshot"
 )
 
 // Fragment is one pre-recordable replica: stable player id + source text.
@@ -34,12 +27,12 @@ var genericStyles = []string{"dont_know", "mishear", "ack"}
 // Enumerate lists fragments in deterministic order: opening, sorted facts ×
 // sorted answer styles (+short/confirm defaults like scenario_from_snapshot),
 // GENERIC variants, SLOW_DOWN, URGE over critical slots (label from slots{}).
-func Enumerate(sc snapshot.ScenarioSnapshot, slots map[string]string, generic map[string]map[string][]string, slowdown map[string]string, urge map[string]string) []Fragment {
+func Enumerate(sc ScenarioSnapshot, slots map[string]string, generic map[string]map[string][]string, slowdown map[string]string, urge map[string]string) []Fragment {
 	out := []Fragment{}
 	out = append(out, Fragment{ID: fmt.Sprintf("a/%s/opening.wav", sc.ID), Text: sc.Opening})
 
 	keys := make([]string, 0, len(sc.Facts))
-	byKey := make(map[string]snapshot.FactSnapshot, len(sc.Facts))
+	byKey := make(map[string]FactSnapshot, len(sc.Facts))
 	for _, f := range sc.Facts {
 		keys = append(keys, f.Key)
 		byKey[f.Key] = f

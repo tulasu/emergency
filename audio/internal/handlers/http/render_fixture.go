@@ -1,7 +1,7 @@
 package httpapi
 
 // renderFixture is replaced by the generated dialog render constants
-// (audio/internal/enumerate/testdata/render_fixture.json, see
+// (audio/internal/domain/testdata/render_fixture.json, see
 // audio/tools/export_render_fixture.py). The checked-in fallback below
 // mirrors dialog/core/dialog/render.py so the service boots without
 // regeneration; TestEnumerateParity fails on drift.

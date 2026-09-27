@@ -15,26 +15,25 @@ import (
 	"time"
 
 	"audio/internal/config"
-	"audio/internal/enumerate"
-	"audio/internal/hash"
-	"audio/internal/s3"
-	"audio/internal/snapshot"
-	"audio/internal/stats"
-	"audio/internal/store"
+	"audio/internal/domain"
+	"audio/internal/repositories"
+	"audio/internal/services"
+	"audio/pkg/hash"
+	"audio/pkg/s3"
 
 	"github.com/google/uuid"
 )
 
-// API wires HTTP handlers to store/S3/stats.
+// API wires HTTP handlers to repositories/S3/stats.
 type API struct {
 	cfg   config.Config
-	store *store.Store
+	store *repositories.Store
 	s3    *s3.Client
-	stats *stats.Stats
+	stats *services.Stats
 }
 
 // New builds the API.
-func New(cfg config.Config, st *store.Store, s3c *s3.Client, stt *stats.Stats) *API {
+func New(cfg config.Config, st *repositories.Store, s3c *s3.Client, stt *services.Stats) *API {
 	return &API{cfg: cfg, store: st, s3: s3c, stats: stt}
 }
 
@@ -114,12 +113,12 @@ func (a *API) ensure(w http.ResponseWriter, r *http.Request) {
 	for k := range in.Slots {
 		known[k] = true
 	}
-	sc, err := snapshot.Validate(in.Scenario, known)
+	sc, err := domain.Validate(in.Scenario, known)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	frags := enumerate.Enumerate(sc, in.Slots, renderFixture.Generic, renderFixture.Slowdown, renderFixture.Urge)
+	frags := domain.Enumerate(sc, in.Slots, renderFixture.Generic, renderFixture.Slowdown, renderFixture.Urge)
 	sums := make([][32]byte, len(frags))
 	for i, f := range frags {
 		sums[i] = hash.Texthash(hash.Normalize(f.Text), voice, a.cfg.Rate, hash.Model)
@@ -152,7 +151,7 @@ func (a *API) getManifest(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	m, err := a.store.GetManifest(ctx, ticketID)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, repositories.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "no manifest")
 		return
 	}
@@ -179,7 +178,7 @@ func (a *API) getBlob(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	voice, rate, err := a.store.BlobVoice(ctx, sum)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, repositories.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "no blob")
 		return
 	}
@@ -209,7 +208,7 @@ func (a *API) deleteTicket(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	n, err := a.store.DeleteTicket(ctx, ticketID)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, repositories.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "no ticket")
 		return
 	}

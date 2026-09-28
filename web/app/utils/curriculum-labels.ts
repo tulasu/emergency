@@ -103,6 +103,35 @@ export function formatOpened(done?: number | null, total?: number | null): strin
   return `${done ?? 0}/${total}`;
 }
 
+export type OpenedForTone = 'info' | 'warning' | 'neutral';
+
+export function formatOpenedFor(
+  openedFor?: number | null,
+  openedTotal?: number | null,
+): { label: string; tone: OpenedForTone } {
+  if (openedTotal == null || openedTotal <= 0) {
+    return { label: 'не открыто', tone: 'neutral' };
+  }
+  if (!openedFor || openedFor <= 0) {
+    return { label: 'не открыто', tone: 'neutral' };
+  }
+  if (openedFor >= openedTotal) {
+    return { label: `всем · ${openedFor}`, tone: 'info' };
+  }
+  return { label: `${openedFor} из ${openedTotal}`, tone: 'warning' };
+}
+
+export function formatPassedFraction(
+  rate?: number | null,
+  total?: number | null,
+): string {
+  if (total == null || total <= 0 || rate == null) {
+    return '—';
+  }
+  const passed = Math.round((rate / 100) * total);
+  return `${passed} / ${total}`;
+}
+
 export function formatSuccessRate(rate?: number | null): string {
   if (rate == null) {
     return '—';
@@ -150,17 +179,51 @@ export function audioStatusLabel(status?: string | null): string {
   }
 }
 
+export function shortVariantKey(title: string): string {
+  const latin = title.match(/[A-Za-z]/);
+  if (latin) {
+    return latin[0].toUpperCase();
+  }
+  const cyr = title.match(/[А-Яа-яЁё]/);
+  if (cyr) {
+    return cyr[0].toUpperCase();
+  }
+  return title.slice(0, 1) || '?';
+}
+
 export function variantLabels(
   variants: Array<{ title: string; is_primary?: boolean; status?: string }>,
+  mode: 'short' | 'full' = 'short',
 ): string {
   if (!variants.length) {
     return '—';
   }
-  return variants
-    .map((v) => {
-      const star = v.is_primary ? '★' : '';
-      const draft = v.status === 'draft' ? ' черн.' : '';
-      return `${v.title}${star}${draft}`.trim();
-    })
-    .join(' · ');
+  if (mode === 'full') {
+    return variants
+      .map((v) => {
+        const star = v.is_primary ? '★' : '';
+        const draft = v.status === 'draft' ? ' черн.' : '';
+        return `${v.title}${star}${draft}`.trim();
+      })
+      .join(' · ');
+  }
+  const parts = variants.map((v) => {
+    const key = shortVariantKey(v.title);
+    const star = v.is_primary ? '★' : '';
+    const draft = v.status === 'draft' ? ' черн.' : '';
+    return `${key}${star}${draft}`.trim();
+  });
+  const hasDraft = variants.some((v) => v.status === 'draft');
+  const compact = parts
+    .map((p) => p.replace(/ черн\.$/, ''))
+    .join(', ');
+  return hasDraft ? `${compact} (черновик)` : compact;
+}
+
+export function compareVariantHeader(variant: {
+  title: string;
+  is_primary?: boolean;
+}): string {
+  const key = shortVariantKey(variant.title);
+  return variant.is_primary ? `${key} ★` : key;
 }

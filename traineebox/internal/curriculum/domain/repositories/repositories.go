@@ -70,6 +70,22 @@ type VariantRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+type VariantMetrics struct {
+	TicketCount        int
+	AttemptCount       int
+	AvgSuccess         *float64
+	HardestTicketTitle string
+	HardestTicketRate  *float64
+}
+
+type MetricsReader interface {
+	VariantMetrics(ctx context.Context, variantID uuid.UUID) (VariantMetrics, error)
+	LessonAttemptStats(ctx context.Context, lessonID uuid.UUID, threshold int) (openedFor int, passedRate *float64, avgSuccess *float64, err error)
+	ModuleAttemptStats(ctx context.Context, moduleID uuid.UUID) (openedDone int, successRate *float64, err error)
+	AssignmentGroupBreakdown(ctx context.Context, moduleID uuid.UUID) (groups []models.AssignmentGroupSummary, individuals int, err error)
+	LessonPoolExtras(ctx context.Context, lessonID uuid.UUID) (ticketCount int, variantsLabel string, passedRate *float64, err error)
+}
+
 type AssignmentRepository interface {
 	Upsert(ctx context.Context, asg models.UserModule) error
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]models.UserModule, error)

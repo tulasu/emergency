@@ -76,4 +76,31 @@ func Register(api huma.API, a *API) {
 		Tags:        []string{"Auth"},
 		Security:    []map[string][]string{{"session": {}}},
 	}, a.changeRoleHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-users",
+		Method:      http.MethodGet,
+		Path:        "/auth/users",
+		Summary:     "List users",
+		Tags:        []string{"Auth"},
+		Security:    []map[string][]string{{"session": {}}},
+	}, a.listUsersHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-user",
+		Method:      http.MethodGet,
+		Path:        "/auth/users/{userId}",
+		Summary:     "Get user profile",
+		Tags:        []string{"Auth"},
+		Security:    []map[string][]string{{"session": {}}},
+	}, a.getUserHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "change-password",
+		Method:      http.MethodPost,
+		Path:        "/auth/me/password",
+		Summary:     "Change own password",
+		Tags:        []string{"Auth"},
+		Security:    []map[string][]string{{"session": {}}},
+	}, a.changePasswordHandler)
 }

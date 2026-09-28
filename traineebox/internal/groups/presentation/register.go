@@ -96,7 +96,7 @@ func (a *API) createGroupHandler(ctx context.Context, in *createGroupInput) (*gr
 	if err != nil {
 		return nil, err
 	}
-	if user.Role != value_objects.AccountRoleTeacher {
+	if user.Role != value_objects.AccountRoleTeacher && user.Role != value_objects.AccountRoleAdmin {
 		return nil, huma.Error403Forbidden("forbidden")
 	}
 	group, err := a.createGroup.Execute(ctx, application.CreateGroupInput{

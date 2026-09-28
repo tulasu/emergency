@@ -124,7 +124,17 @@ type LessonSummary struct {
 	OpenedFor     int
 	OpenedTotal   int
 	PassedRate    *float64
+	AvgSuccess    *float64
 	Attention     string
+}
+
+type VariantSummary struct {
+	Variant            Variant
+	TicketCount        int
+	AttemptCount       int
+	AvgSuccess         *float64
+	HardestTicketTitle string
+	HardestTicketRate  *float64
 }
 
 type AssignmentGroupSummary struct {

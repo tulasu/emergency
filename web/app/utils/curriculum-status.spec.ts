@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   attemptStatusLabel,
   audioStatusLabel,
+  compareVariantHeader,
   formatOpened,
+  formatOpenedFor,
+  formatPassedFraction,
   formatSuccessRate,
   lessonCountLabel,
   moduleDisplayStatus,
   moduleStatusLabel,
   ruGroups,
   ruUsers,
+  shortVariantKey,
+  variantLabels,
   variantStatusLabel,
 } from './curriculum-labels';
 
@@ -59,6 +64,11 @@ describe('curriculum labels', () => {
     expect(formatOpened(null, null)).toBe('—');
     expect(formatSuccessRate(71.2)).toBe('71%');
     expect(formatSuccessRate(null)).toBe('—');
+    expect(formatOpenedFor(0, 38)).toEqual({ label: 'не открыто', tone: 'neutral' });
+    expect(formatOpenedFor(38, 38)).toEqual({ label: 'всем · 38', tone: 'info' });
+    expect(formatOpenedFor(12, 38)).toEqual({ label: '12 из 38', tone: 'warning' });
+    expect(formatPassedFraction(50, 38)).toBe('19 / 38');
+    expect(formatPassedFraction(null, 38)).toBe('—');
   });
 
   it('maps attempt and audio statuses', () => {
@@ -67,5 +77,22 @@ describe('curriculum labels', () => {
     expect(attemptStatusLabel('finished')).toBe('Сдано');
     expect(audioStatusLabel('ready')).toBe('Аудио готово');
     expect(audioStatusLabel('')).toBe('Без аудио');
+  });
+
+  it('formats short variant labels', () => {
+    expect(shortVariantKey('Вариант A')).toBe('A');
+    expect(
+      variantLabels(
+        [
+          { title: 'Вариант A', is_primary: true, status: 'approved' },
+          { title: 'Вариант B', status: 'approved' },
+          { title: 'Вариант C', status: 'draft' },
+        ],
+        'short',
+      ),
+    ).toBe('A★, B, C (черновик)');
+    expect(
+      compareVariantHeader({ title: 'Вариант A', is_primary: true }),
+    ).toBe('A ★');
   });
 });

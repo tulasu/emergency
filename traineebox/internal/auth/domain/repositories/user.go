@@ -13,6 +13,8 @@ type UserRepository interface {
 	Create(ctx context.Context, user models.User) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.User, error)
 	FindByLogin(ctx context.Context, login value_objects.Login) (models.User, error)
+	List(ctx context.Context) ([]models.User, error)
 	SetBlocked(ctx context.Context, id uuid.UUID, blocked bool) error
 	SetRole(ctx context.Context, id uuid.UUID, role value_objects.Role) error
+	SetPasswordHash(ctx context.Context, id uuid.UUID, hash value_objects.PasswordHash) error
 }

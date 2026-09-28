@@ -59,6 +59,36 @@ func (r *TicketRepository) FindByID(ctx context.Context, id uuid.UUID) (models.T
 	return ticket, nil
 }
 
+type LibraryTicketExtras struct {
+	IncidentTypeCode string
+	IncidentType     string
+	SlotsTotal       int
+	SlotsRequired    int
+	VariantUsage     int
+}
+
+func (r *TicketRepository) LibraryExtras(ctx context.Context, ticketID uuid.UUID) (LibraryTicketExtras, error) {
+	var out LibraryTicketExtras
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COALESCE(r.incident_type_code, ''), COALESCE(it.title, '')
+		FROM ticket_reference_answers r
+		LEFT JOIN incident_types it ON it.code = r.incident_type_code
+		WHERE r.ticket_id = $1
+	`, ticketID).Scan(&out.IncidentTypeCode, &out.IncidentType)
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM reference_answer_tags WHERE ticket_id = $1
+	`, ticketID).Scan(&out.SlotsTotal)
+	out.SlotsRequired = out.SlotsTotal
+	if out.SlotsRequired > 2 {
+		out.SlotsRequired = out.SlotsTotal - out.SlotsTotal/3
+	}
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM tickets
+		WHERE variant_id IS NOT NULL AND title = (SELECT title FROM tickets WHERE id = $1)
+	`, ticketID).Scan(&out.VariantUsage)
+	return out, nil
+}
+
 func (r *TicketRepository) ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Ticket, error) {
 	rows, err := r.pool.Query(ctx, `SELECT id, variant_id, topic_id, title, body, created_by, created_at,
 		scenario, scenario_version, audio_digest, audio_status, reference, mode, briefing

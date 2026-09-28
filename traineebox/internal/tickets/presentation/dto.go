@@ -32,14 +32,20 @@ type serviceDTO struct {
 }
 
 type ticketDTO struct {
-	ID          string  `json:"id"`
-	VariantID   *string `json:"variant_id,omitempty"`
-	TopicID     string  `json:"topic_id"`
-	Title       string  `json:"title"`
-	Body        string  `json:"body"`
-	CreatedBy   string  `json:"created_by"`
-	CreatedAt   string  `json:"created_at"`
-	AudioStatus string  `json:"audio_status"`
+	ID               string  `json:"id"`
+	VariantID        *string `json:"variant_id,omitempty"`
+	TopicID          string  `json:"topic_id"`
+	Title            string  `json:"title"`
+	Body             string  `json:"body"`
+	CreatedBy        string  `json:"created_by"`
+	CreatedAt        string  `json:"created_at"`
+	AudioStatus      string  `json:"audio_status"`
+	IncidentTypeCode string  `json:"incident_type_code,omitempty"`
+	IncidentType     string  `json:"incident_type,omitempty"`
+	SlotsTotal       *int    `json:"slots_total,omitempty"`
+	SlotsRequired    *int    `json:"slots_required,omitempty"`
+	VariantUsage     *int    `json:"variant_usage,omitempty"`
+	CardStatus       string  `json:"card_status,omitempty"`
 }
 
 type answerDTO struct {

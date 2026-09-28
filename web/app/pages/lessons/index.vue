@@ -14,6 +14,11 @@ const lessons = ref<Lesson[]>([]);
 const modules = ref<Module[]>([]);
 const loading = ref(true);
 const error = ref('');
+const toast = ref('');
+const assignOpen = ref(false);
+const assignBusy = ref(false);
+const assignLesson = ref<Lesson | null>(null);
+const targetModuleId = ref('');
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -36,6 +41,10 @@ const folders = computed(() => {
   }));
 });
 
+const moduleOptions = computed(() =>
+  modules.value.map((m) => ({ value: m.id, label: m.title })),
+);
+
 function lessonMeta(lesson: Lesson): string {
   if (lesson.ticket_count != null) {
     return ruCount(lesson.ticket_count, 'карта', 'карты', 'карт');
@@ -49,10 +58,21 @@ function lessonMeta(lesson: Lesson): string {
 function lessonTags(lesson: Lesson): string[] {
   const tags: string[] = [];
   if (lesson.variants_label) {
-    tags.push(lesson.variants_label);
+    const parts = lesson.variants_label
+      .split(/[·,]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+    tags.push(...parts);
+  }
+  if (!tags.length && lesson.attention) {
+    tags.push(lesson.attention);
   }
   if (lesson.archived_at) {
     tags.push('Архив');
+  }
+  if (!tags.length) {
+    tags.push('Пул');
   }
   return tags.slice(0, 2);
 }
@@ -83,6 +103,38 @@ function onSearch(): void {
   }, 250);
 }
 
+function openAssign(lesson: Lesson): void {
+  assignLesson.value = lesson;
+  targetModuleId.value =
+    modules.value.find((m) => m.id !== lesson.module_id)?.id || modules.value[0]?.id || '';
+  assignOpen.value = true;
+  error.value = '';
+  toast.value = '';
+}
+
+async function assignToModule(): Promise<void> {
+  if (!assignLesson.value || !targetModuleId.value) {
+    return;
+  }
+  assignBusy.value = true;
+  error.value = '';
+  try {
+    const existing = await lessonsApi.listByModule(targetModuleId.value);
+    await lessonsApi.copyFromPool(
+      targetModuleId.value,
+      assignLesson.value.id,
+      existing.length,
+    );
+    assignOpen.value = false;
+    toast.value = 'Занятие добавлено в модуль';
+    await navigateTo(`/modules/${targetModuleId.value}`);
+  } catch (err) {
+    error.value = apiErrorMessage(err);
+  } finally {
+    assignBusy.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
 });
@@ -100,7 +152,8 @@ onMounted(() => {
     </header>
 
     <div class="pool-page__body">
-      <p v-if="error" class="curriculum-error">{{ error }}</p>
+      <p v-if="error && !assignOpen" class="curriculum-error">{{ error }}</p>
+      <p v-if="toast" class="toast">{{ toast }}</p>
       <p v-if="loading" class="curriculum-empty">Загрузка…</p>
       <p v-else-if="!lessons.length" class="curriculum-empty">Занятия не найдены</p>
       <div v-else class="curriculum-folders">
@@ -114,13 +167,35 @@ onMounted(() => {
               :meta="lessonMeta(lesson)"
               :tags="lessonTags(lesson)"
               :progress="lesson.passed_rate"
-              action-label="К модулю"
-              @action="navigateTo(`/modules/${lesson.module_id}`)"
+              action-label="Назначить"
+              @action="openAssign(lesson)"
             />
           </div>
         </section>
       </div>
     </div>
+
+    <TbModal v-model:open="assignOpen" title="Назначить занятие в модуль">
+      <div class="curriculum-form">
+        <p class="page-sub">
+          «{{ assignLesson?.title }}» будет скопировано в выбранный модуль.
+        </p>
+        <TbField label="Модуль">
+          <TbSelect
+            v-model="targetModuleId"
+            :options="moduleOptions"
+            placeholder="Выберите модуль"
+          />
+        </TbField>
+        <p v-if="error" class="curriculum-error">{{ error }}</p>
+      </div>
+      <template #footer>
+        <TbButton variant="secondary" @click="assignOpen = false">Отмена</TbButton>
+        <TbButton :busy="assignBusy" :disabled="!targetModuleId" @click="assignToModule">
+          Назначить
+        </TbButton>
+      </template>
+    </TbModal>
   </section>
 </template>
 
@@ -159,6 +234,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 28px;
   min-height: 0;
+}
+
+.toast {
+  margin: 0;
+  color: var(--color-success);
+  font: var(--font-mute);
 }
 
 @media (max-width: 1100px) {

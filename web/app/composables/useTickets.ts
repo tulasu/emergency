@@ -32,5 +32,9 @@ export function useTickets() {
     return $api<Ticket>(`/tickets/${ticketId}`, { method: 'PATCH', body });
   }
 
-  return { library, createLibrary, listByVariant, copyToVariant, get, update };
+  async function remove(ticketId: string): Promise<void> {
+    await $api(`/tickets/${ticketId}`, { method: 'DELETE' });
+  }
+
+  return { library, createLibrary, listByVariant, copyToVariant, get, update, remove };
 }

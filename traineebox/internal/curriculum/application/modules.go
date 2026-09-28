@@ -41,6 +41,7 @@ func (uc CreateModule) Execute(ctx context.Context, in CreateModuleInput) (model
 type ListModules struct {
 	Modules     repositories.ModuleRepository
 	Assignments repositories.AssignmentRepository
+	Metrics     repositories.MetricsReader
 }
 
 func (uc ListModules) Execute(ctx context.Context, actorID uuid.UUID, role value_objects.AccountRole) ([]models.Module, error) {
@@ -270,6 +271,7 @@ type ListVariants struct {
 	Lessons     repositories.LessonRepository
 	Variants    repositories.VariantRepository
 	Assignments repositories.AssignmentRepository
+	Metrics     repositories.MetricsReader
 	StaffOnly   bool
 }
 
@@ -281,6 +283,30 @@ func (uc ListVariants) Execute(ctx context.Context, _ uuid.UUID, role value_obje
 		return nil, err
 	}
 	return uc.Variants.ListByLesson(ctx, lessonID)
+}
+
+func (uc ListVariants) ExecuteSummaries(ctx context.Context, actorID uuid.UUID, role value_objects.AccountRole, lessonID uuid.UUID) ([]models.VariantSummary, error) {
+	items, err := uc.Execute(ctx, actorID, role, lessonID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.VariantSummary, 0, len(items))
+	for _, v := range items {
+		sum := models.VariantSummary{Variant: v}
+		if uc.Metrics != nil {
+			m, err := uc.Metrics.VariantMetrics(ctx, v.ID)
+			if err != nil {
+				return nil, err
+			}
+			sum.TicketCount = m.TicketCount
+			sum.AttemptCount = m.AttemptCount
+			sum.AvgSuccess = m.AvgSuccess
+			sum.HardestTicketTitle = m.HardestTicketTitle
+			sum.HardestTicketRate = m.HardestTicketRate
+		}
+		out = append(out, sum)
+	}
+	return out, nil
 }
 
 type UpdateVariant struct {

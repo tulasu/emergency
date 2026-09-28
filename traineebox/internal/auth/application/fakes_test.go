@@ -90,6 +90,28 @@ func (f *fakeUsers) SetRole(_ context.Context, id uuid.UUID, role value_objects.
 	return nil
 }
 
+func (f *fakeUsers) List(_ context.Context) ([]models.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]models.User, 0, len(f.byID))
+	for _, u := range f.byID {
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+func (f *fakeUsers) SetPasswordHash(_ context.Context, id uuid.UUID, hash value_objects.PasswordHash) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.byID[id]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	u.PasswordHash = hash
+	f.byID[id] = u
+	return nil
+}
+
 type fakeSessions struct {
 	mu       sync.Mutex
 	byHash   map[string]models.Session

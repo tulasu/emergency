@@ -3,7 +3,8 @@ import type { Lesson, Module, ModuleSummary, Variant } from '~/types/curriculum'
 import type { TbTabItem } from '~/types/ui';
 import { apiErrorMessage } from '~/utils/api-error';
 import {
-  formatOpened,
+  formatOpenedFor,
+  formatPassedFraction,
   formatSuccessRate,
   lessonCountLabel,
   moduleDisplayStatus,
@@ -62,7 +63,7 @@ const headerSubtitle = computed(() => {
   ];
   const assigned = summary.value?.assignment?.total_users ?? 0;
   if (assigned > 0) {
-    parts.push(`назначен ${assigned}`);
+    parts.push(`назначен ${assigned} ученикам`);
   }
   return parts.filter(Boolean).join(' · ');
 });
@@ -205,9 +206,10 @@ onMounted(async () => {
             :key="lesson.id"
             :title="lesson.title"
             :variants-label="lesson.variants_label"
-            :opened-label="formatOpened(lesson.opened_for, lesson.opened_total)"
-            :passed-label="formatSuccessRate(lesson.passed_rate)"
-            :average-label="formatSuccessRate(lesson.passed_rate)"
+            :opened-label="formatOpenedFor(lesson.opened_for, lesson.opened_total).label"
+            :opened-tone="formatOpenedFor(lesson.opened_for, lesson.opened_total).tone"
+            :passed-label="formatPassedFraction(lesson.passed_rate, lesson.opened_for ?? lesson.opened_total)"
+            :average-label="formatSuccessRate(lesson.avg_success)"
             :hint="lesson.attention"
             :selected="selectedLessonId === lesson.id"
             @click="openLesson(lesson)"
@@ -256,8 +258,8 @@ onMounted(async () => {
     <div v-else class="module-page__panel">
       <h2 class="sheet__section-title">Сводка и допуск</h2>
       <p class="page-sub">
-        Порог допуска модуля: {{ module?.success_threshold }}%. Детальная аналитика появится после
-        накопления попыток.
+        Порог допуска модуля: {{ module?.success_threshold }}%. Ниже порога — нужна повторная
+        попытка.
       </p>
       <ul class="side-panel__list">
         <li class="side-panel__row">
@@ -269,10 +271,44 @@ onMounted(async () => {
           <strong>{{ summary?.assignment?.total_users ?? 0 }}</strong>
         </li>
         <li class="side-panel__row">
+          <span>Успешность модуля</span>
+          <strong>{{ formatSuccessRate(summary?.module.success_rate) }}</strong>
+        </li>
+        <li class="side-panel__row">
           <span>Требует внимания</span>
           <strong>{{ attentionItems.length }}</strong>
         </li>
       </ul>
+      <div class="admit-table">
+        <div class="admit-table__head">
+          <span>Занятие</span>
+          <span>Открыто</span>
+          <span>Сдали</span>
+          <span>Среднее</span>
+          <span>Допуск</span>
+        </div>
+        <div v-for="lesson in lessons" :key="lesson.id" class="admit-table__row">
+          <span>{{ lesson.title }}</span>
+          <span>{{ lesson.opened_for ?? 0 }}/{{ lesson.opened_total ?? 0 }}</span>
+          <span>{{ formatPassedFraction(lesson.passed_rate) }}</span>
+          <span>{{ formatSuccessRate(lesson.avg_success) }}</span>
+          <span>
+            {{
+              lesson.avg_success == null
+                ? '—'
+                : lesson.avg_success >= (module?.success_threshold ?? 70)
+                  ? 'Открыт'
+                  : 'Ниже порога'
+            }}
+          </span>
+        </div>
+      </div>
+      <TbButton
+        variant="secondary"
+        @click="navigateTo(`/analytics?module=${moduleId}`)"
+      >
+        Открыть аналитику модуля
+      </TbButton>
     </div>
 
     <OpenLessonModal
@@ -369,7 +405,33 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 640px;
+  max-width: 960px;
+}
+
+.admit-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admit-table__head,
+.admit-table__row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  font: 500 13px/1.3 var(--font-sans);
+}
+
+.admit-table__head {
+  color: var(--color-text-muted);
+  font: 500 12px/1.3 var(--font-sans);
+}
+
+.admit-table__row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
 }
 
 .toast {

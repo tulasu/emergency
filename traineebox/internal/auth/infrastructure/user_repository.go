@@ -17,11 +17,12 @@ import (
 )
 
 type UserRepository struct {
-	q *authsql.Queries
+	pool *pgxpool.Pool
+	q    *authsql.Queries
 }
 
 func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
-	return &UserRepository{q: authsql.New(pool)}
+	return &UserRepository{pool: pool, q: authsql.New(pool)}
 }
 
 func (r *UserRepository) Create(ctx context.Context, user models.User) error {
@@ -62,6 +63,26 @@ func (r *UserRepository) FindByLogin(ctx context.Context, login value_objects.Lo
 	return mapUser(row), nil
 }
 
+func (r *UserRepository) List(ctx context.Context) ([]models.User, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, login, password_hash, role, full_name, blocked_at, created_at
+		FROM users
+		ORDER BY full_name, login`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.User
+	for rows.Next() {
+		var row authsql.User
+		if err := rows.Scan(&row.ID, &row.Login, &row.PasswordHash, &row.Role, &row.FullName, &row.BlockedAt, &row.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, mapUser(row))
+	}
+	return out, rows.Err()
+}
+
 func (r *UserRepository) SetBlocked(ctx context.Context, id uuid.UUID, blocked bool) error {
 	var blockedAt *time.Time
 	if blocked {
@@ -79,6 +100,11 @@ func (r *UserRepository) SetRole(ctx context.Context, id uuid.UUID, role value_o
 		ID:   id,
 		Role: string(role),
 	})
+}
+
+func (r *UserRepository) SetPasswordHash(ctx context.Context, id uuid.UUID, hash value_objects.PasswordHash) error {
+	_, err := r.pool.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, hash.String())
+	return err
 }
 
 func mapUser(row authsql.User) models.User {

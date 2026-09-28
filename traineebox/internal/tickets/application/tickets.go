@@ -173,6 +173,20 @@ func (uc DeleteTicket) Execute(ctx context.Context, role value_objects.AccountRo
 	return nil
 }
 
+type GetReferenceAnswer struct {
+	Tickets repositories.TicketRepository
+}
+
+func (uc GetReferenceAnswer) Execute(ctx context.Context, role value_objects.AccountRole, ticketID uuid.UUID) (models.ReferenceAnswer, error) {
+	if err := abilities.ManageTicket(role); err != nil {
+		return models.ReferenceAnswer{}, err
+	}
+	if _, err := uc.Tickets.FindByID(ctx, ticketID); err != nil {
+		return models.ReferenceAnswer{}, err
+	}
+	return uc.Tickets.FindReference(ctx, ticketID)
+}
+
 type SetReferenceAnswer struct {
 	Tickets repositories.TicketRepository
 	Catalog repositories.CatalogRepository

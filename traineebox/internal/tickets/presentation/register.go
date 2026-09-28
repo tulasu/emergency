@@ -29,11 +29,13 @@ func Register(api huma.API, a *API) {
 	huma.Register(api, huma.Operation{OperationID: "update-ticket", Method: http.MethodPatch, Path: "/tickets/{ticketId}", Summary: "Update ticket", Tags: []string{"Tickets"}, Security: sec}, a.updateTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "delete-ticket", Method: http.MethodDelete, Path: "/tickets/{ticketId}", Summary: "Delete ticket", Tags: []string{"Tickets"}, Security: sec}, a.deleteTicketHandler)
 	huma.Register(api, huma.Operation{OperationID: "set-ticket-reference", Method: http.MethodPut, Path: "/tickets/{ticketId}/reference", Summary: "Set ticket reference answer", Tags: []string{"Tickets"}, Security: sec}, a.setReferenceHandler)
+	huma.Register(api, huma.Operation{OperationID: "get-ticket-reference", Method: http.MethodGet, Path: "/tickets/{ticketId}/reference", Summary: "Get ticket reference answer", Tags: []string{"Tickets"}, Security: sec}, a.getReferenceHandler)
 
 	huma.Register(api, huma.Operation{OperationID: "grant-attempt", Method: http.MethodPost, Path: "/users/{userId}/attempts", Summary: "Grant attempt to user", Tags: []string{"Attempts"}, Security: sec}, a.grantAttemptHandler)
 	huma.Register(api, huma.Operation{OperationID: "open-variant", Method: http.MethodPost, Path: "/variants/{variantId}/open", Summary: "Open variant for users/groups/module", Tags: []string{"Attempts"}, Security: sec}, a.openVariantHandler)
 	huma.Register(api, huma.Operation{OperationID: "start-attempt", Method: http.MethodPost, Path: "/attempts/{attemptId}/start", Summary: "Start granted attempt", Tags: []string{"Attempts"}, Security: sec}, a.startAttemptHandler)
 	huma.Register(api, huma.Operation{OperationID: "list-my-attempts", Method: http.MethodGet, Path: "/variants/{variantId}/attempts/mine", Summary: "List my attempts for variant", Tags: []string{"Attempts"}, Security: sec}, a.listMyAttemptsHandler)
+	huma.Register(api, huma.Operation{OperationID: "list-variant-attempts", Method: http.MethodGet, Path: "/variants/{variantId}/attempts", Summary: "List all attempts for variant", Tags: []string{"Attempts"}, Security: sec}, a.listVariantAttemptsHandler)
 	huma.Register(api, huma.Operation{OperationID: "get-attempt", Method: http.MethodGet, Path: "/attempts/{attemptId}", Summary: "Get attempt", Tags: []string{"Attempts"}, Security: sec}, a.getAttemptHandler)
 	huma.Register(api, huma.Operation{OperationID: "save-attempt-answer", Method: http.MethodPatch, Path: "/attempts/{attemptId}/answers/{ticketId}", Summary: "Save attempt draft answer", Tags: []string{"Attempts"}, Security: sec}, a.saveAnswerHandler)
 	huma.Register(api, huma.Operation{OperationID: "submit-attempt", Method: http.MethodPost, Path: "/attempts/{attemptId}/submit", Summary: "Submit attempt", Tags: []string{"Attempts"}, Security: sec}, a.submitAttemptHandler)
@@ -138,9 +140,38 @@ func (a *API) listLibraryTicketsHandler(ctx context.Context, in *struct {
 	}
 	out := make([]ticketDTO, 0, len(tickets))
 	for _, t := range tickets {
-		out = append(out, toTicketDTO(t))
+		dto := toTicketDTO(t)
+		dto.CardStatus = cardStatusFromAudio(t.AudioStatus)
+		if a.ticketExtras != nil {
+			if extras, err := a.ticketExtras.LibraryExtras(ctx, t.ID); err == nil {
+				dto.IncidentTypeCode = extras.IncidentTypeCode
+				if extras.IncidentTypeCode != "" {
+					if extras.IncidentType != "" {
+						dto.IncidentType = extras.IncidentTypeCode + " · " + extras.IncidentType
+					} else {
+						dto.IncidentType = extras.IncidentTypeCode
+					}
+				}
+				st, sr, vu := extras.SlotsTotal, extras.SlotsRequired, extras.VariantUsage
+				dto.SlotsTotal = &st
+				dto.SlotsRequired = &sr
+				dto.VariantUsage = &vu
+			}
+		}
+		out = append(out, dto)
 	}
 	return &struct{ Body []ticketDTO }{Body: out}, nil
+}
+
+func cardStatusFromAudio(audio string) string {
+	switch audio {
+	case "ready":
+		return "ready"
+	case "pending":
+		return "pending"
+	default:
+		return "draft"
+	}
 }
 
 func (a *API) createLibraryTicketHandler(ctx context.Context, in *struct {
@@ -307,6 +338,21 @@ func (a *API) setReferenceHandler(ctx context.Context, in *struct {
 	return &struct{ Body referenceAnswerDTO }{Body: toReferenceDTO(ref)}, nil
 }
 
+func (a *API) getReferenceHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	TicketID      uuid.UUID `path:"ticketId"`
+}) (*struct{ Body referenceAnswerDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	ref, err := a.getReferenceAnswer.Execute(ctx, user.Role, in.TicketID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &struct{ Body referenceAnswerDTO }{Body: toReferenceDTO(ref)}, nil
+}
+
 func (a *API) grantAttemptHandler(ctx context.Context, in *struct {
 	Authorization string    `header:"Authorization"`
 	UserID        uuid.UUID `path:"userId"`
@@ -419,6 +465,25 @@ func (a *API) listMyAttemptsHandler(ctx context.Context, in *struct {
 		return nil, err
 	}
 	attempts, err := a.listMyAttempts.Execute(ctx, application.ListMyAttemptsInput{ActorID: user.ID, Role: user.Role, VariantID: in.VariantID})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]attemptDTO, 0, len(attempts))
+	for _, at := range attempts {
+		out = append(out, toAttemptDTO(at))
+	}
+	return &struct{ Body []attemptDTO }{Body: out}, nil
+}
+
+func (a *API) listVariantAttemptsHandler(ctx context.Context, in *struct {
+	Authorization string    `header:"Authorization"`
+	VariantID     uuid.UUID `path:"variantId"`
+}) (*struct{ Body []attemptDTO }, error) {
+	user, err := a.requireSignedIn(ctx, in.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	attempts, err := a.listVariantAttempts.Execute(ctx, application.ListVariantAttemptsInput{Role: user.Role, VariantID: in.VariantID})
 	if err != nil {
 		return nil, mapError(err)
 	}

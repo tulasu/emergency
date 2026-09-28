@@ -13,8 +13,16 @@ const ticketsActive = computed(() => route.path.startsWith('/tickets'));
 const modulesActive = computed(
   () => route.path.startsWith('/modules') || route.path.startsWith('/lessons'),
 );
-const usersActive = computed(() => route.path.startsWith('/users'));
+const groupsActive = computed(
+  () => route.path.startsWith('/groups') || route.path.startsWith('/users'),
+);
+const analyticsActive = computed(() => route.path.startsWith('/analytics'));
+const knowledgeActive = computed(() => route.path.startsWith('/knowledge'));
+const resultsActive = computed(() => route.path.startsWith('/results'));
+const settingsActive = computed(() => route.path.startsWith('/settings'));
+const adminActive = computed(() => route.path.startsWith('/admin'));
 const homeActive = computed(() => route.path === '/' || route.path.startsWith('/learn'));
+const isAdmin = computed(() => auth.user?.role === 'admin');
 
 const shortName = computed(() => {
   const full = auth.user?.full_name?.trim();
@@ -103,18 +111,38 @@ async function logout(): Promise<void> {
           <TbIcon name="book" />
           <span>Модули</span>
         </NuxtLink>
-        <NuxtLink class="nav" to="/users/new" title="Группы" :class="{ 'nav--active': usersActive }">
+        <NuxtLink class="nav" to="/groups" title="Группы" :class="{ 'nav--active': groupsActive }">
           <TbIcon name="users" />
           <span>Группы</span>
         </NuxtLink>
-        <button class="nav" type="button" title="Аналитика" disabled>
+        <NuxtLink
+          class="nav"
+          to="/analytics"
+          title="Аналитика"
+          :class="{ 'nav--active': analyticsActive }"
+        >
           <TbIcon name="chart" />
           <span>Аналитика</span>
-        </button>
-        <button class="nav" type="button" title="Справочник" disabled>
+        </NuxtLink>
+        <NuxtLink
+          class="nav"
+          to="/knowledge"
+          title="Справочник"
+          :class="{ 'nav--active': knowledgeActive }"
+        >
           <TbIcon name="file" />
           <span>Справочник</span>
-        </button>
+        </NuxtLink>
+        <NuxtLink
+          v-if="isAdmin"
+          class="nav"
+          to="/admin"
+          title="Админ"
+          :class="{ 'nav--active': adminActive }"
+        >
+          <TbIcon name="settings" />
+          <span>Админ</span>
+        </NuxtLink>
       </template>
 
       <template v-else>
@@ -122,22 +150,37 @@ async function logout(): Promise<void> {
           <TbIcon name="home" />
           <span>Главная</span>
         </NuxtLink>
-        <button class="nav" type="button" title="Справочная база" disabled>
+        <NuxtLink
+          class="nav"
+          to="/knowledge"
+          title="Справочная база"
+          :class="{ 'nav--active': knowledgeActive }"
+        >
           <TbIcon name="book" />
           <span>Справочная база</span>
-        </button>
-        <button class="nav" type="button" title="Мои результаты" disabled>
+        </NuxtLink>
+        <NuxtLink
+          class="nav"
+          to="/results"
+          title="Мои результаты"
+          :class="{ 'nav--active': resultsActive }"
+        >
           <TbIcon name="chart" />
           <span>Мои результаты</span>
-        </button>
+        </NuxtLink>
       </template>
     </nav>
 
     <div class="sidebar__account">
-      <button class="nav" type="button" title="Настройки" disabled>
+      <NuxtLink
+        class="nav"
+        to="/settings"
+        title="Настройки"
+        :class="{ 'nav--active': settingsActive }"
+      >
         <TbIcon name="settings" />
         <span>Настройки</span>
-      </button>
+      </NuxtLink>
       <button class="nav nav--danger" type="button" title="Выйти" @click="logout">
         <TbIcon name="log-out" />
         <span>Выйти</span>

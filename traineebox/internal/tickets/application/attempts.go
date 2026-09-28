@@ -245,10 +245,23 @@ func (uc ListMyAttempts) Execute(ctx context.Context, in ListMyAttemptsInput) ([
 	if err := abilities.ViewOwnAttempt(in.Role); err != nil {
 		return nil, err
 	}
-	if in.Role == value_objects.AccountRoleStudent {
-		return uc.Attempts.ListByVariantUser(ctx, in.VariantID, in.ActorID)
-	}
 	return uc.Attempts.ListByVariantUser(ctx, in.VariantID, in.ActorID)
+}
+
+type ListVariantAttempts struct {
+	Attempts repositories.AttemptRepository
+}
+
+type ListVariantAttemptsInput struct {
+	Role      value_objects.AccountRole
+	VariantID uuid.UUID
+}
+
+func (uc ListVariantAttempts) Execute(ctx context.Context, in ListVariantAttemptsInput) ([]models.Attempt, error) {
+	if err := abilities.ViewAnyAttempt(in.Role); err != nil {
+		return nil, err
+	}
+	return uc.Attempts.ListByVariant(ctx, in.VariantID)
 }
 
 type GetAttemptReport struct {

@@ -34,6 +34,7 @@ type AttemptRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (models.Attempt, error)
 	FindOpen(ctx context.Context, variantID, userID uuid.UUID) (models.Attempt, error)
 	ListByVariantUser(ctx context.Context, variantID, userID uuid.UUID) ([]models.Attempt, error)
+	ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Attempt, error)
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]models.Attempt, error)
 	HasAny(ctx context.Context, variantID, userID uuid.UUID) (bool, error)
 	NextAttemptNo(ctx context.Context, variantID, userID uuid.UUID) (int, error)

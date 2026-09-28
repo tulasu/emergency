@@ -85,6 +85,35 @@ func (r *AttemptRepository) ListByVariantUser(ctx context.Context, variantID, us
 	return r.loadAttempts(ctx, rows)
 }
 
+func (r *AttemptRepository) ListByVariant(ctx context.Context, variantID uuid.UUID) ([]models.Attempt, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, variant_id, user_id, granted_by, attempt_no, status,
+		       available_from, started_at, deadline_at, finished_at, score, report
+		FROM ticket_attempts
+		WHERE variant_id = $1
+		ORDER BY attempt_no DESC, started_at DESC NULLS LAST`, variantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []ticketssql.TicketAttempt
+	for rows.Next() {
+		var row ticketssql.TicketAttempt
+		if err := rows.Scan(
+			&row.ID, &row.VariantID, &row.UserID, &row.GrantedBy, &row.AttemptNo, &row.Status,
+			&row.AvailableFrom, &row.StartedAt, &row.DeadlineAt, &row.FinishedAt, &row.Score, &row.Report,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return r.loadAttempts(ctx, list)
+}
+
 func (r *AttemptRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]models.Attempt, error) {
 	rows, err := r.q.ListAttemptsByUser(ctx, userID)
 	if err != nil {

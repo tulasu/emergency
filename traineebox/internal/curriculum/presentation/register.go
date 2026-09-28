@@ -545,13 +545,13 @@ func (a *API) listVariantsHandler(ctx context.Context, in *struct {
 	if err != nil {
 		return nil, err
 	}
-	items, err := a.listVariants.Execute(ctx, user.ID, user.Role, in.LessonID)
+	items, err := a.listVariants.ExecuteSummaries(ctx, user.ID, user.Role, in.LessonID)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	out := make([]variantDTO, 0, len(items))
 	for _, it := range items {
-		out = append(out, toVariantDTO(it))
+		out = append(out, toVariantSummaryDTO(it))
 	}
 	return &struct{ Body []variantDTO }{Body: out}, nil
 }
@@ -623,13 +623,18 @@ func (a *API) listLessonsPoolHandler(ctx context.Context, in *struct {
 	if err != nil {
 		return nil, err
 	}
-	items, err := a.listLessonsPool.Execute(ctx, user.Role, in.Q)
+	items, err := a.listLessonsPool.ExecuteDetailed(ctx, user.Role, in.Q)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	out := make([]lessonDTO, 0, len(items))
 	for _, it := range items {
-		out = append(out, toLessonDTO(it))
+		dto := toLessonDTO(it.Lesson)
+		tc := it.TicketCount
+		dto.TicketCount = &tc
+		dto.VariantsLabel = it.VariantsLabel
+		dto.PassedRate = it.PassedRate
+		out = append(out, dto)
 	}
 	return &struct{ Body []lessonDTO }{Body: out}, nil
 }

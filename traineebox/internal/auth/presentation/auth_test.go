@@ -158,6 +158,10 @@ func (m *memUsers) SetBlocked(context.Context, uuid.UUID, bool) error { return n
 func (m *memUsers) SetRole(context.Context, uuid.UUID, value_objects.Role) error {
 	return nil
 }
+func (m *memUsers) List(context.Context) ([]models.User, error) { return nil, nil }
+func (m *memUsers) SetPasswordHash(context.Context, uuid.UUID, value_objects.PasswordHash) error {
+	return nil
+}
 
 type memSessions struct {
 	byHash map[string]models.Session

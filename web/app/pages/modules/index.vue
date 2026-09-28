@@ -13,6 +13,17 @@ const items = ref<Module[]>([]);
 const selectedId = ref('');
 const loading = ref(true);
 const error = ref('');
+const sortNewestFirst = ref(true);
+
+const sortedItems = computed(() => {
+  const list = [...items.value];
+  list.sort((a, b) => {
+    const da = new Date(a.created_at).getTime();
+    const db = new Date(b.created_at).getTime();
+    return sortNewestFirst.value ? db - da : da - db;
+  });
+  return list;
+});
 
 const scopes = computed(() => [
   { id: 'all', label: 'Все', count: scopeCounts.value.all },
@@ -106,10 +117,14 @@ onMounted(() => {
     <div class="modules-card">
       <div class="modules-card__filters">
         <TbSegmented v-model="scope" :items="scopes" />
-        <span class="sort-hint">
+        <button
+          type="button"
+          class="sort-hint"
+          @click="sortNewestFirst = !sortNewestFirst"
+        >
           <TbIcon name="pencil" />
-          Сначала недавно изменённые
-        </span>
+          {{ sortNewestFirst ? 'Сначала недавно изменённые' : 'Сначала старые' }}
+        </button>
       </div>
 
       <div class="curriculum-table-head curriculum-table-head--modules">
@@ -123,10 +138,10 @@ onMounted(() => {
 
       <p v-if="error" class="curriculum-error">{{ error }}</p>
       <p v-else-if="loading" class="curriculum-empty">Загрузка…</p>
-      <p v-else-if="!items.length" class="curriculum-empty">Модули не найдены</p>
+      <p v-else-if="!sortedItems.length" class="curriculum-empty">Модули не найдены</p>
       <div v-else class="modules-card__list">
         <ModuleTableRow
-          v-for="mod in items"
+          v-for="mod in sortedItems"
           :key="mod.id"
           :module="mod"
           :selected="selectedId === mod.id"
@@ -197,6 +212,10 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
 }
 
 .sort-hint :deep(.tb-icon) {

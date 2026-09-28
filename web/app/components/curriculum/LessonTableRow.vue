@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import type { OpenedForTone } from '~/utils/curriculum-labels';
+
 defineProps<{
   title: string;
   variantsLabel?: string;
   openedLabel?: string;
+  openedTone?: OpenedForTone;
   passedLabel?: string;
   averageLabel?: string;
   hint?: string;
@@ -27,13 +30,27 @@ const emit = defineEmits<{
       <p v-if="hint" class="lesson-table-row__hint">{{ hint }}</p>
     </div>
     <div class="lesson-table-row__cell">{{ variantsLabel || '—' }}</div>
-    <div class="lesson-table-row__cell">{{ openedLabel || '—' }}</div>
+    <div class="lesson-table-row__cell">
+      <span
+        class="lesson-table-row__pill"
+        :class="`lesson-table-row__pill--${openedTone || 'neutral'}`"
+      >
+        {{ openedLabel || 'не открыто' }}
+      </span>
+    </div>
     <div class="lesson-table-row__cell">{{ passedLabel || '—' }}</div>
     <div
       class="lesson-table-row__cell lesson-table-row__cell--avg"
       :class="{ 'is-success': averageLabel && averageLabel !== '—' }"
     >
-      {{ averageLabel || '—' }}
+      <span>{{ averageLabel || '—' }}</span>
+      <span
+        v-if="averageLabel && averageLabel !== '—'"
+        class="lesson-table-row__bar"
+        :style="{
+          '--pct': averageLabel.replace('%', '') + '%',
+        }"
+      />
     </div>
     <TbIcon name="chevron-right" />
   </button>
@@ -75,6 +92,7 @@ const emit = defineEmits<{
 
 .lesson-table-row__main strong {
   font: var(--font-block);
+  overflow-wrap: anywhere;
 }
 
 .lesson-table-row__hint {
@@ -88,12 +106,58 @@ const emit = defineEmits<{
   font: 500 14px/1.3 var(--font-sans);
 }
 
+.lesson-table-row__pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font: 500 12px/1.3 var(--font-sans);
+  white-space: nowrap;
+}
+
+.lesson-table-row__pill--info {
+  background: var(--color-secondary);
+  color: var(--color-primary);
+}
+
+.lesson-table-row__pill--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.lesson-table-row__pill--neutral {
+  background: #14141414;
+  color: var(--color-text-muted);
+}
+
 .lesson-table-row__cell--avg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   color: var(--color-text-subtle);
 }
 
 .lesson-table-row__cell--avg.is-success {
   color: var(--color-success);
+}
+
+.lesson-table-row__bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: #14141414;
+  overflow: hidden;
+}
+
+.lesson-table-row__bar::after {
+  content: '';
+  display: block;
+  width: var(--pct, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
 }
 
 @media (max-width: 1360px) {

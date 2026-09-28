@@ -255,9 +255,17 @@ async function startLesson(item: AssignedLesson): Promise<void> {
       error.value = 'Попытка ещё не выдана. Дождитесь открытия занятия преподавателем.';
       return;
     }
+    if (['submitted', 'scored', 'finished', 'timed_out'].includes(item.status || '')) {
+      await navigateTo(`/learn/attempts/${id}/result`);
+      return;
+    }
+    if (item.status === 'in_progress') {
+      await navigateTo(`/learn/attempts/${id}`);
+      return;
+    }
     const attempt = await attemptsApi.start(id);
     toast.value = `Попытка № ${attempt.attempt_no} начата`;
-    await load();
+    await navigateTo(`/learn/attempts/${attempt.id}`);
   } catch (err) {
     error.value = apiErrorMessage(err);
   } finally {

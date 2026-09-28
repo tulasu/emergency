@@ -65,17 +65,23 @@ type lessonDTO struct {
 	OpenedFor       *int     `json:"opened_for,omitempty"`
 	OpenedTotal     *int     `json:"opened_total,omitempty"`
 	PassedRate      *float64 `json:"passed_rate,omitempty"`
+	AvgSuccess      *float64 `json:"avg_success,omitempty"`
 	Attention       string   `json:"attention,omitempty"`
 }
 
 type variantDTO struct {
-	ID        string `json:"id"`
-	LessonID  string `json:"lesson_id"`
-	Title     string `json:"title"`
-	Position  int    `json:"position"`
-	Status    string `json:"status"`
-	IsPrimary bool   `json:"is_primary"`
-	CreatedAt string `json:"created_at"`
+	ID                 string   `json:"id"`
+	LessonID           string   `json:"lesson_id"`
+	Title              string   `json:"title"`
+	Position           int      `json:"position"`
+	Status             string   `json:"status"`
+	IsPrimary          bool     `json:"is_primary"`
+	CreatedAt          string   `json:"created_at"`
+	TicketCount        *int     `json:"ticket_count,omitempty"`
+	AttemptCount       *int     `json:"attempt_count,omitempty"`
+	AvgSuccess         *float64 `json:"avg_success,omitempty"`
+	HardestTicketTitle string   `json:"hardest_ticket_title,omitempty"`
+	HardestTicketRate  *float64 `json:"hardest_ticket_rate,omitempty"`
 }
 
 type assignedLessonDTO struct {
@@ -178,6 +184,17 @@ func toVariantDTO(v models.Variant) variantDTO {
 	}
 }
 
+func toVariantSummaryDTO(v models.VariantSummary) variantDTO {
+	dto := toVariantDTO(v.Variant)
+	tc, ac := v.TicketCount, v.AttemptCount
+	dto.TicketCount = &tc
+	dto.AttemptCount = &ac
+	dto.AvgSuccess = v.AvgSuccess
+	dto.HardestTicketTitle = v.HardestTicketTitle
+	dto.HardestTicketRate = v.HardestTicketRate
+	return dto
+}
+
 func toAssignedModuleDTO(m application.AssignedModule) assignedModuleDTO {
 	lessons := make([]assignedLessonDTO, 0, len(m.Lessons))
 	for _, l := range m.Lessons {
@@ -205,6 +222,7 @@ func toModuleSummaryDTO(s models.ModuleSummary) moduleSummaryDTO {
 		dto.OpenedFor = &of
 		dto.OpenedTotal = &ot
 		dto.PassedRate = l.PassedRate
+		dto.AvgSuccess = l.AvgSuccess
 		dto.Attention = l.Attention
 		lessons = append(lessons, dto)
 	}

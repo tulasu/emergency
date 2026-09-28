@@ -257,7 +257,8 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		GetMyAttempt:      ticketsapp.GetMyAttempt{Tickets: ticketsRepo, Attempts: attemptsRepo},
 		ListMyAttempts:    ticketsapp.ListMyAttempts{Attempts: attemptsRepo},
 		GetAttemptReport:  ticketsapp.GetAttemptReport{Attempts: attemptsRepo},
-		Authenticate:      ticketsSessionAuthenticator{auth: authenticate},
+		Authenticate: ticketsSessionAuthenticator{auth: authenticate},
+		TicketExtras: testTicketExtras{repo: ticketsRepo},
 	})
 
 	currHandlers := currpresentation.NewAPI(currpresentation.Deps{
@@ -276,20 +277,20 @@ func NewAPI(t *testing.T, pool *pgxpool.Pool) http.Handler {
 		GetAttachment:    currapp.GetAttachment{Articles: articles, Attachments: attachments, Assignments: assignments, Blobs: blobs},
 		DeleteAttachment: currapp.DeleteAttachment{Attachments: attachments, Blobs: blobs},
 		CreateModule:     currapp.CreateModule{Modules: modules},
-		ListModules:      currapp.ListModules{Modules: modules, Assignments: assignments},
+		ListModules:      currapp.ListModules{Modules: modules, Assignments: assignments, Metrics: currStore},
 		GetModule:        currapp.GetModule{Modules: modules, Assignments: assignments},
-		GetModuleSummary: currapp.GetModuleSummary{Modules: modules, Lessons: lessons, Variants: variants},
+		GetModuleSummary: currapp.GetModuleSummary{Modules: modules, Lessons: lessons, Variants: variants, Metrics: currStore},
 		UpdateModule:     currapp.UpdateModule{Modules: modules},
 		DeleteModule:     currapp.DeleteModule{Modules: modules},
 		CreateLesson:     currapp.CreateLesson{Modules: modules, Lessons: lessons},
 		ListLessons:      currapp.ListLessons{Modules: modules, Lessons: lessons, Assignments: assignments},
-		ListLessonsPool:  currapp.ListLessonsPool{Lessons: lessons},
+		ListLessonsPool:  currapp.ListLessonsPool{Lessons: lessons, Metrics: currStore},
 		CopyLessonPool:   currapp.CopyLessonFromPool{Modules: modules, Lessons: lessons, Variants: variants},
 		ArchiveLesson:    currapp.ArchiveLesson{Lessons: lessons},
 		UpdateLesson:     currapp.UpdateLesson{Lessons: lessons},
 		DeleteLesson:     currapp.DeleteLesson{Lessons: lessons},
 		CreateVariant:    currapp.CreateVariant{Lessons: lessons, Variants: variants},
-		ListVariants:     currapp.ListVariants{Lessons: lessons, Variants: variants},
+		ListVariants:     currapp.ListVariants{Lessons: lessons, Variants: variants, Metrics: currStore},
 		GetVariant:       currapp.GetVariant{Variants: variants},
 		UpdateVariant:    currapp.UpdateVariant{Variants: variants},
 		CloneVariant:     currapp.CloneVariant{Variants: variants},
@@ -440,4 +441,22 @@ func mapTicketsToGeneration(err error) error {
 	default:
 		return err
 	}
+}
+
+type testTicketExtras struct {
+	repo *ticketsinfra.TicketRepository
+}
+
+func (t testTicketExtras) LibraryExtras(ctx context.Context, ticketID uuid.UUID) (ticketspresentation.LibraryTicketExtras, error) {
+	e, err := t.repo.LibraryExtras(ctx, ticketID)
+	if err != nil {
+		return ticketspresentation.LibraryTicketExtras{}, err
+	}
+	return ticketspresentation.LibraryTicketExtras{
+		IncidentTypeCode: e.IncidentTypeCode,
+		IncidentType:     e.IncidentType,
+		SlotsTotal:       e.SlotsTotal,
+		SlotsRequired:    e.SlotsRequired,
+		VariantUsage:     e.VariantUsage,
+	}, nil
 }

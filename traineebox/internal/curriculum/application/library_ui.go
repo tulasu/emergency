@@ -60,6 +60,14 @@ func (uc ListModules) ExecuteFiltered(ctx context.Context, in ListModulesInput) 
 			}
 			label = strings.Join(parts, " · ")
 		}
+		openedDone := 0
+		var successRate *float64
+		if uc.Metrics != nil {
+			openedDone, successRate, err = uc.Metrics.ModuleAttemptStats(ctx, m.ID)
+			if err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, models.ModuleListItem{
 			Module:         m,
 			LessonCount:    n,
@@ -67,8 +75,9 @@ func (uc ListModules) ExecuteFiltered(ctx context.Context, in ListModulesInput) 
 			AssignedGroups: groups,
 			AssignedUsers:  users,
 			AssignedLabel:  label,
-			OpenedDone:     0,
+			OpenedDone:     openedDone,
 			OpenedTotal:    n,
+			SuccessRate:    successRate,
 		})
 	}
 	return out, nil
@@ -120,6 +129,7 @@ type GetModuleSummary struct {
 	Modules  repositories.ModuleRepository
 	Lessons  repositories.LessonRepository
 	Variants repositories.VariantRepository
+	Metrics  repositories.MetricsReader
 }
 
 func (uc GetModuleSummary) Execute(ctx context.Context, role value_objects.AccountRole, moduleID uuid.UUID) (models.ModuleSummary, error) {
@@ -138,13 +148,21 @@ func (uc GetModuleSummary) Execute(ctx context.Context, role value_objects.Accou
 	if err != nil {
 		return models.ModuleSummary{}, err
 	}
+	groups := []models.AssignmentGroupSummary{}
+	individuals := assigned
+	if uc.Metrics != nil {
+		groups, individuals, err = uc.Metrics.AssignmentGroupBreakdown(ctx, moduleID)
+		if err != nil {
+			return models.ModuleSummary{}, err
+		}
+	}
 	out := models.ModuleSummary{
 		Module:  module,
 		Lessons: make([]models.LessonSummary, 0, len(lessons)),
 		Assignment: models.AssignmentSummary{
 			TotalUsers:  assigned,
-			Individuals: assigned,
-			Groups:      []models.AssignmentGroupSummary{},
+			Individuals: individuals,
+			Groups:      groups,
 		},
 		Attention: []string{},
 	}
@@ -164,38 +182,83 @@ func (uc GetModuleSummary) Execute(ctx context.Context, role value_objects.Accou
 		labels := make([]string, 0, len(vars))
 		hasApproved := false
 		for _, v := range vars {
-			star := ""
+			key := shortVariantKeyApp(v.Title.String())
 			if v.IsPrimary {
-				star = "★"
+				key += "★"
 			}
-			draft := ""
 			if v.Status.String() == "draft" {
-				draft = " черн."
+				key += " черн."
 			} else {
 				hasApproved = true
 			}
-			labels = append(labels, strings.TrimSpace(v.Title.String()+star+draft))
+			labels = append(labels, strings.TrimSpace(key))
 		}
 		attention := ""
 		if !hasApproved {
 			attention = "нет утверждённого варианта"
-			out.Attention = append(out.Attention, fmt.Sprintf("%s: нет утверждённого варианта", l.Title.String()))
+			out.Attention = append(out.Attention, fmt.Sprintf("«%s» нельзя открыть", l.Title.String()))
+			out.Attention = append(out.Attention, "нет утверждённого варианта")
+		}
+		openedFor := 0
+		var passedRate, avgSuccess *float64
+		if uc.Metrics != nil {
+			openedFor, passedRate, avgSuccess, err = uc.Metrics.LessonAttemptStats(ctx, l.ID, module.SuccessThreshold)
+			if err != nil {
+				return models.ModuleSummary{}, err
+			}
 		}
 		out.Lessons = append(out.Lessons, models.LessonSummary{
 			Lesson:        l,
 			VariantCount:  vc,
 			TicketCount:   tc,
 			VariantsLabel: strings.Join(labels, " · "),
-			OpenedFor:     0,
+			OpenedFor:     openedFor,
 			OpenedTotal:   assigned,
+			PassedRate:    passedRate,
+			AvgSuccess:    avgSuccess,
 			Attention:     attention,
 		})
 	}
 	return out, nil
 }
 
+func shortVariantKeyApp(title string) string {
+	runes := []rune(title)
+	for _, r := range runes {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+			if r >= 'a' && r <= 'z' {
+				return string(r - 32)
+			}
+			return string(r)
+		}
+	}
+	for _, r := range runes {
+		if (r >= 'А' && r <= 'Я') || (r >= 'а' && r <= 'я') || r == 'Ё' || r == 'ё' {
+			if r >= 'а' && r <= 'я' {
+				return string(r - 32)
+			}
+			if r == 'ё' {
+				return "Ё"
+			}
+			return string(r)
+		}
+	}
+	if len(runes) > 0 {
+		return string(runes[0])
+	}
+	return "?"
+}
+
 type ListLessonsPool struct {
 	Lessons repositories.LessonRepository
+	Metrics repositories.MetricsReader
+}
+
+type LessonPoolItem struct {
+	Lesson        models.Lesson
+	TicketCount   int
+	VariantsLabel string
+	PassedRate    *float64
 }
 
 func (uc ListLessonsPool) Execute(ctx context.Context, role value_objects.AccountRole, q string) ([]models.Lesson, error) {
@@ -203,6 +266,28 @@ func (uc ListLessonsPool) Execute(ctx context.Context, role value_objects.Accoun
 		return nil, err
 	}
 	return uc.Lessons.ListPool(ctx, q)
+}
+
+func (uc ListLessonsPool) ExecuteDetailed(ctx context.Context, role value_objects.AccountRole, q string) ([]LessonPoolItem, error) {
+	lessons, err := uc.Execute(ctx, role, q)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]LessonPoolItem, 0, len(lessons))
+	for _, l := range lessons {
+		item := LessonPoolItem{Lesson: l}
+		if uc.Metrics != nil {
+			tc, label, rate, err := uc.Metrics.LessonPoolExtras(ctx, l.ID)
+			if err != nil {
+				return nil, err
+			}
+			item.TicketCount = tc
+			item.VariantsLabel = label
+			item.PassedRate = rate
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 type ArchiveLesson struct {

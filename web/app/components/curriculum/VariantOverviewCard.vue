@@ -115,13 +115,10 @@ const primaryCta = computed(() =>
 
     <p class="variant-overview-card__meta">{{ metaLabel }}</p>
 
-    <div
-      class="variant-overview-card__actions"
-      :class="{ 'variant-overview-card__actions--row': showMakePrimary }"
-    >
+    <div class="variant-overview-card__actions">
       <TbButton
         :variant="variant.status === 'draft' ? 'primary' : 'secondary'"
-        :width="showMakePrimary ? undefined : 'block'"
+        width="block"
         @click="emit('open')"
       >
         {{ primaryCta }}
@@ -129,6 +126,7 @@ const primaryCta = computed(() =>
       <TbButton
         v-if="showMakePrimary"
         variant="secondary"
+        width="block"
         @click="emit('makePrimary')"
       >
         Сделать основным
@@ -142,6 +140,7 @@ const primaryCta = computed(() =>
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
   min-height: 260px;
   padding: 20px;
   border: 1px solid var(--color-border);
@@ -149,6 +148,7 @@ const primaryCta = computed(() =>
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .variant-overview-card--primary {
@@ -234,14 +234,13 @@ const primaryCta = computed(() =>
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
-.variant-overview-card__actions--row {
-  flex-direction: row;
-  align-items: stretch;
-}
-
-.variant-overview-card__actions--row :deep(.tb-btn) {
-  flex: 1;
+.variant-overview-card__actions :deep(.tb-btn) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 </style>
